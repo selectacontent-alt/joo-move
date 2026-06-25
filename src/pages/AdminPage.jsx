@@ -5,6 +5,8 @@ import TranslationEditor from '../components/TranslationEditor';
 import CatalogTranslationEditor from '../components/CatalogTranslationEditor';
 import ShippingDashboard from '../components/ShippingDashboard';
 import AdminCustomers from '../components/AdminCustomers';
+import { clearJsonCache } from '../lib/prefetchCache';
+import { normalizeMediaUrl } from '../lib/mediaUtils';
 
 // SVG Icons for professional look
 const Icons = {
@@ -824,21 +826,26 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
 
   const handleToggleHomepage = async (id, currentVal) => {
     const newVal = currentVal ? 0 : 1;
-    // Optimistic update
     setMediaGalleryItems(prev =>
       prev.map(item => item.id === id ? { ...item, show_on_homepage: newVal } : item)
     );
     try {
-      await fetch('/api/media/homepage', {
+      const res = await fetch('/api/media/homepage', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, show_on_homepage: newVal })
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error || 'Failed to update homepage media');
+      }
+      clearJsonCache('/api/media/homepage');
+      clearJsonCache('/api/media');
     } catch (err) {
-      // Rollback on error
       setMediaGalleryItems(prev =>
         prev.map(item => item.id === id ? { ...item, show_on_homepage: currentVal } : item)
       );
+      alert(`تعذر حفظ اختيار الصورة: ${err.message}`);
     }
   };
 
@@ -3326,7 +3333,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                   اضغط على الزر الخاص بالرئيسية على أي صورة لإظهارها في الصفحة الرئيسية — الصور ذات الإطار الأخضر محددة حالياً.
                 </span>
                 <span style={{ marginRight: 'auto', background: '#16a34a', color: '#fff', borderRadius: '100px', padding: '0.25rem 0.8rem', fontSize: '0.85rem', fontWeight: '800' }}>
-                  {mediaGalleryItems.filter(m => m.show_on_homepage).length} محدد
+                  {mediaGalleryItems.filter(m => Number(m.show_on_homepage) === 1).length} محدد
                 </span>
               </div>
 
@@ -3364,7 +3371,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1.5rem' }}>
                 {mediaGalleryItems.map(item => {
-                  const isPinned = !!item.show_on_homepage;
+                  const isPinned = Number(item.show_on_homepage) === 1;
                   return (
                     <div
                       key={item.id}
@@ -3391,7 +3398,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                       </div>
 
                       {/* Media */}
-                      <img src={item.image_url} alt={item.title || 'media'} style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block', background: '#f1f5f9' }} />
+                      <img src={normalizeMediaUrl(item.image_url)} alt={item.title || 'media'} style={{ width: '100%', height: '180px', objectFit: 'cover', display: 'block', background: '#f1f5f9' }} />
 
                       {/* Bottom action bar */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem 0.6rem', background: '#f8fafc', borderTop: '1px solid #f1f5f9' }}>

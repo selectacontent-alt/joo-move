@@ -6,6 +6,7 @@ import {
   LEGACY_ORDER_CONFIRMATION_TEMPLATE
 } from './whatsappTemplates';
 import { DEFAULT_SITE_SETTINGS } from './homeSettings';
+import { ensureMediaHomepageColumn } from './mediaGallerySchema';
 
 let pool = global._mysqlPool;
 
@@ -238,10 +239,12 @@ export async function getPool() {
         title VARCHAR(255) NULL,
         description TEXT NULL,
         image_url VARCHAR(1000) NOT NULL,
+        show_on_homepage TINYINT(1) NOT NULL DEFAULT 0,
         sort_order INT DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+    await ensureMediaHomepageColumn(pool);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS coupons (

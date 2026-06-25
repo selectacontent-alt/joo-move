@@ -28,3 +28,13 @@ export const fetchJsonCached = (url, options = {}) => {
 };
 
 export const prefetchJson = (url) => fetchJsonCached(url).catch(() => null);
+
+export const clearJsonCache = (url) => {
+  const cache = getCache();
+  if (!cache) return;
+  if (url) {
+    cache.delete(url);
+    return;
+  }
+  cache.clear();
+};
