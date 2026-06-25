@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["nodejs_22", "chromium", "unzip"]
+
+[variables]
+PUPPETEER_SKIP_DOWNLOAD = "true"
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+PUPPETEER_PROTOCOL_TIMEOUT_MS = "300000"
+WHATSAPP_SEND_TASK_TIMEOUT_MS = "90000"

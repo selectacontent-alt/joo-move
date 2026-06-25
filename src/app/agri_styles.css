@@ -1,0 +1,411 @@
+/* Agricultural Website Styles */
+.hero-modern-agri {
+  padding: 4rem 0;
+  background-color: var(--bg-light);
+  overflow: hidden;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+.agri-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(20, 90, 36, 0.1);
+  color: var(--primary-color);
+  padding: 0.5rem 1rem;
+  border-radius: 50px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+
+.hero-title {
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: var(--text-dark);
+  line-height: 1.2;
+  margin-bottom: 1.5rem;
+}
+
+.hero-desc {
+  font-size: 1.15rem;
+  color: var(--text-muted);
+  line-height: 1.8;
+  margin-bottom: 2.5rem;
+  max-width: 90%;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.hero-stats {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  border-top: 1px solid var(--border-gray);
+  padding-top: 2rem;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--white);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-info strong {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  line-height: 1;
+}
+
+.stat-info span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 40px;
+  background: var(--border-gray);
+}
+
+.hero-image-side {
+  position: relative;
+}
+
+.image-composition {
+  position: relative;
+}
+
+.floating-card-agri {
+  position: absolute;
+  bottom: -20px;
+  right: -20px;
+  background: var(--white);
+  padding: 1.2rem;
+  border-radius: 16px;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  animation: float 4s ease-in-out infinite;
+}
+
+.floating-card-agri strong {
+  display: block;
+  font-size: 1.1rem;
+  color: var(--text-dark);
+}
+
+.floating-card-agri p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* Trust Badges */
+.trust-badges-section {
+  padding: 3rem 0;
+  background: var(--white);
+  border-bottom: 1px solid var(--border-gray);
+}
+
+.trust-badges-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.5rem;
+}
+
+.trust-badge {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tb-icon {
+  width: 56px;
+  height: 56px;
+  background: rgba(139, 195, 74, 0.15);
+  color: var(--secondary-color);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tb-text h3 {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-dark);
+  margin-bottom: 0.2rem;
+}
+
+.tb-text p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+@media (max-width: 991px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-text-side {
+    text-align: center;
+  }
+  .agri-badge {
+    margin: 0 auto 1.5rem;
+  }
+  .hero-desc {
+    margin: 0 auto 2.5rem;
+  }
+  .hero-actions {
+    justify-content: center;
+  }
+  .hero-stats {
+    justify-content: center;
+  }
+  .trust-badges-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 576px) {
+  .trust-badges-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-title {
+    font-size: 2.5rem;
+  }
+}
+
+
+/* ==========================================================================
+   IMMERSIVE HERO ANIMATION (Grass & Sky)
+   ========================================================================== */
+
+.immersive-hero {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  min-height: 700px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #051408; /* Dark base before sky loads */
+}
+
+/* Sky layer */
+.hero-sky {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center center;
+  opacity: 0;
+  animation: fadeInSky 1.5s ease-in-out 0.8s forwards;
+  z-index: 1;
+}
+
+.hero-sky::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.5) 100%);
+}
+
+/* Grass layer (Realistic Grass Design) */
+.hero-grass {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 25vh;
+  min-height: 200px;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1000 200' preserveAspectRatio='none'%3E%3Cpath fill='%2315803d' d='M0,200 L1000,200 L1000,100 C950,150 900,50 850,100 C800,150 750,80 700,110 C650,140 600,60 550,100 C500,140 450,70 400,120 C350,170 300,90 250,130 C200,170 150,80 100,120 C50,160 25,90 0,110 Z'/%3E%3Cpath fill='%2322c55e' d='M0,200 L1000,200 L1000,130 C950,180 900,80 850,130 C800,180 750,110 700,140 C650,170 600,90 550,130 C500,170 450,100 400,150 C350,200 300,120 250,160 C200,200 150,110 100,150 C50,190 25,120 0,140 Z'/%3E%3C/svg%3E") no-repeat bottom center;
+  background-size: cover;
+  transform: translateY(100%);
+  animation: slideUpGrass 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s forwards;
+  z-index: 2;
+  box-shadow: inset 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.hero-grass::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+  mix-blend-mode: overlay;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 3;
+  text-align: center;
+  color: white;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 5vh;
+}
+
+.hero-title-main {
+  font-size: clamp(2.5rem, 6vw, 5.5rem);
+  font-weight: 900;
+  margin: 0;
+  opacity: 0;
+  transform: translateY(40px);
+  animation: fadeUpText 1s ease-out 1.8s forwards;
+  text-shadow: 0 5px 25px rgba(0,0,0,0.6);
+  letter-spacing: -0.5px;
+  line-height: 1.2;
+}
+
+.hero-subtitle-main {
+  font-size: clamp(1.2rem, 3vw, 2rem);
+  font-weight: 600;
+  margin: 0;
+  opacity: 0;
+  transform: translateY(30px);
+  animation: fadeUpText 1s ease-out 2.5s forwards;
+  color: #f1f5f9;
+  text-shadow: 0 3px 15px rgba(0,0,0,0.6);
+}
+
+.hero-btn-wrapper {
+  margin-top: 2rem;
+  opacity: 0;
+  transform: translateY(30px);
+  animation: fadeUpText 1s ease-out 3.2s forwards;
+}
+
+.hero-btn-explore {
+  background: var(--primary-color);
+  color: white;
+  padding: 1.2rem 3rem;
+  border-radius: 50px;
+  font-size: 1.3rem;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 10px 30px rgba(22, 101, 52, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid transparent;
+}
+
+.hero-btn-explore:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 15px 40px rgba(22, 101, 52, 0.7);
+  background: #166534;
+  border-color: rgba(255,255,255,0.2);
+}
+
+@keyframes slideUpGrass {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes fadeInSky {
+  0% { opacity: 0; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeUpText {
+  0% { opacity: 0; transform: translateY(40px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+
+/* ==========================================================================
+   INTERACTIVE POINTED GRASS FIELD
+   ========================================================================== */
+
+.grass-field-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 35vh; /* Lush grass height */
+  min-height: 200px;
+  z-index: 2;
+  overflow: visible; 
+  pointer-events: none; 
+  transform: translateY(100%);
+  animation: slideUpGrass 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) 0.1s forwards;
+}
+
+.grass-field-gradient-base {
+  position: absolute;
+  bottom: -20px;
+  left: -5%;
+  width: 110%;
+  height: 60px;
+  background: linear-gradient(to top, #064e3b, transparent);
+  z-index: 5;
+  filter: blur(5px);
+}
+
+.grass-swayer {
+  position: absolute;
+  bottom: -10px; 
+  transform-origin: bottom center;
+  animation: swayGrass ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+.grass-blade-physics {
+  width: 100%;
+  height: 100%;
+  transform-origin: bottom center;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Fast, subtle elastic spring */
+  pointer-events: auto; 
+  will-change: transform;
+}
+
+@keyframes slideUpGrass {
+  0% { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes swayGrass {
+  0% { transform: rotate(calc(var(--sway) * -1)); }
+  100% { transform: rotate(var(--sway)); }
+}
