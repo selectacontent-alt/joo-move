@@ -412,7 +412,7 @@ const BookingPage = ({ setCurrentPage }) => {
       {/* Booking Form Section */}
       <section className="booking-form-section" ref={formRef}>
         <div className="booking-section-header">
-          <h2>{t('booking.formTitle')}</h2>
+          <h2 className="booking-form-title-mobile-nowrap">{t('booking.formTitle')}</h2>
           <p>{t('booking.formSubtitle')}</p>
         </div>
 

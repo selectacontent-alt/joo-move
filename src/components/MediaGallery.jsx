@@ -345,7 +345,12 @@ const MediaGallery = () => {
           .masonry-column { gap: 1rem; }
           .media-gallery-section { padding: 8rem 0 8rem 0 !important; }
           .media-container { padding: 0 1rem; }
-          .media-title { font-size: 2.2rem; }
+          .media-title {
+            font-size: clamp(1.25rem, 5.8vw, 1.55rem);
+            line-height: 1.15;
+            white-space: nowrap;
+            letter-spacing: 0;
+          }
           .masonry-item { border-radius: 12px; }
           .close-lightbox { top: 20px; right: 20px; width: 45px; height: 45px; }
         }

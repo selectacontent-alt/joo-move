@@ -798,6 +798,12 @@
   /* --- Section headers --- */
   .booking-section-header { margin-bottom: 1.4rem; }
   .booking-section-header h2 { font-size: 1.45rem; }
+  .booking-section-header h2.booking-form-title-mobile-nowrap {
+    font-size: clamp(1rem, 4.9vw, 1.28rem);
+    line-height: 1.2;
+    white-space: nowrap;
+    letter-spacing: 0;
+  }
   .booking-section-header p { font-size: 0.88rem; line-height: 1.55; }
 
   /* --- Gallery & Form sections --- */
