@@ -271,7 +271,6 @@ const Hero = ({ setCurrentPage }) => {
   const heroImage = normalizeMediaUrl(settings.hero_image || DEFAULT_SITE_SETTINGS.hero_image);
   const heroTitle = settings.hero_title || DEFAULT_SITE_SETTINGS.hero_title;
   const heroDesc = settings.hero_desc || DEFAULT_SITE_SETTINGS.hero_desc;
-  const heroBadge = settings.hero_badge || DEFAULT_SITE_SETTINGS.hero_badge;
 
   return (
     <>
@@ -569,7 +568,6 @@ const Hero = ({ setCurrentPage }) => {
         </div>
 
         <div className="elite-content-wrapper">
-          {heroBadge && <div className="elite-hero-badge"><ShieldCheck size={18} /> {heroBadge}</div>}
           <h1 className="elite-title" dangerouslySetInnerHTML={{ __html: heroTitle }} />
           <p className="elite-desc" dangerouslySetInnerHTML={{ __html: heroDesc }} />
           <div className="elite-actions">

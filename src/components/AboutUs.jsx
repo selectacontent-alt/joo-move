@@ -86,7 +86,6 @@ const AboutUs = ({ isHomepage = false }) => {
         <div className="why-us-section" style={{ marginTop: isHomepage ? '-3rem' : '0' }}>
 
           <div className="why-header">
-            {settings.why_subtitle && <span className="why-badge">{settings.why_subtitle}</span>}
             <h2 className="elite-section-title">{settings.why_title || DEFAULT_SITE_SETTINGS.why_title}</h2>
             <p className="elite-section-desc">{settings.why_desc || DEFAULT_SITE_SETTINGS.why_desc}</p>
           </div>
