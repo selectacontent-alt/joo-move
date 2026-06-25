@@ -2,13 +2,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { fetchJsonCached } from '../lib/prefetchCache';
+import { normalizeMediaUrl } from '../lib/mediaUtils';
 import { ArrowDown, BadgeCheck, ChevronUp, Leaf, ShieldCheck, Truck, X, MapPin, ChevronDown, Check } from 'lucide-react';
 
 const QIRAT_PER_FEDDAN = 22;
 
 const BookingPage = ({ setCurrentPage }) => {
   const { language, t } = useLanguage();
-  const [config, setConfig] = useState({ pricePerQirat: 120, traysPerQirat: 6, galleryImages: [], notes: '' });
+  const [config, setConfig] = useState({ pricePerQirat: 120, traysPerQirat: 6, galleryImages: [], notes: '', seoImages: {} });
   const [unitType, setUnitType] = useState('qirat');
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState('');
@@ -63,6 +64,12 @@ const BookingPage = ({ setCurrentPage }) => {
   const totalTrays = Math.ceil(totalQirat * config.traysPerQirat);
   const totalPrice = totalQirat * config.pricePerQirat;
   const totalFeddan = unitType === 'feddan' ? numericQuantity : (numericQuantity / QIRAT_PER_FEDDAN);
+
+  const renderSeoThumb = (key) => {
+    const src = normalizeMediaUrl(config.seoImages?.[key] || '');
+    if (!src) return null;
+    return <img src={src} alt="" className="checkout-seo-card-image" loading="lazy" />;
+  };
 
   const handleNextImage = (e) => {
     if (e) e.stopPropagation();
@@ -349,16 +356,22 @@ const BookingPage = ({ setCurrentPage }) => {
           <div className="checkout-seo-grid">
 
             <div className="checkout-seo-card">
-              <div className="checkout-seo-card-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              <div className="checkout-seo-card-media-row">
+                <div className="checkout-seo-card-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                {renderSeoThumb('card1')}
               </div>
               <h3>ما هو البونيكام البرازيلي؟</h3>
               <p>البونيكام البرازيلي هو أحد أنواع الأعلاف الخضراء المميزة، يُستخدم بشكل واسع في تغذية المواشي مثل الأبقار والجاموس والأغنام والماعز. يتميز بسرعة النمو وكثافة الإنتاج، مما يجعله الاختيار الأمثل للمربين الباحثين عن علف طبيعي واقتصادي طوال الموسم.</p>
             </div>
 
             <div className="checkout-seo-card">
-              <div className="checkout-seo-card-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              <div className="checkout-seo-card-media-row">
+                <div className="checkout-seo-card-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                {renderSeoThumb('card2')}
               </div>
               <h3>مميزات شتلات البونيكام من شركة الرحاب</h3>
               <ul className="checkout-seo-list">
@@ -371,8 +384,11 @@ const BookingPage = ({ setCurrentPage }) => {
             </div>
 
             <div className="checkout-seo-card">
-              <div className="checkout-seo-card-icon">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <div className="checkout-seo-card-media-row">
+                <div className="checkout-seo-card-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                </div>
+                {renderSeoThumb('card3')}
               </div>
               <h3>لماذا يختار المربون زراعة البونيكام؟</h3>
               <ul className="checkout-seo-list">
@@ -387,8 +403,11 @@ const BookingPage = ({ setCurrentPage }) => {
 
           <div className="checkout-seo-support-row">
             <div className="checkout-seo-support-card">
-              <div className="checkout-seo-support-icon">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              <div className="checkout-seo-support-media-row">
+                <div className="checkout-seo-support-icon">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                {renderSeoThumb('card4')}
               </div>
               <div>
                 <h3>دعم فني قبل وبعد الزراعة</h3>
@@ -396,8 +415,11 @@ const BookingPage = ({ setCurrentPage }) => {
               </div>
             </div>
             <div className="checkout-seo-support-card">
-              <div className="checkout-seo-support-icon">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+              <div className="checkout-seo-support-media-row">
+                <div className="checkout-seo-support-icon">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                </div>
+                {renderSeoThumb('card5')}
               </div>
               <div>
                 <h3>توصيل شتلات البونيكام لكل المحافظات</h3>

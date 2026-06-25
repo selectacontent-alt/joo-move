@@ -333,7 +333,12 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
     about_image: '',
     facebook_link: '',
     instagram_link: '',
-    tiktok_link: ''
+    tiktok_link: '',
+    booking_seo_image_1: '',
+    booking_seo_image_2: '',
+    booking_seo_image_3: '',
+    booking_seo_image_4: '',
+    booking_seo_image_5: ''
   });
   const [heroImageFile, setHeroImageFile] = useState(null);
   const [heroImagePreview, setHeroImagePreview] = useState('');
@@ -3051,6 +3056,72 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                     placeholder="مثال: الشحن مجاني، سيتم التواصل معك لتحديد موعد التسليم..."
                     rows={3}
                   />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '2rem' }}>
+                  <label style={{ fontWeight: '800', marginBottom: '0.5rem', display: 'block' }}>صور صغيرة لمربعات شرح البونيكام</label>
+                  <p style={{ margin: '0 0 1rem 0', fontSize: '0.9rem', color: '#64748b' }}>
+                    اختر صورة واحدة من الميديا لكل مربع. ستظهر الصورة صغيرة بجانب الأيقونة في صفحة الحجز.
+                  </p>
+                  {[
+                    ['booking_seo_image_1', 'ما هو البونيكام البرازيلي؟'],
+                    ['booking_seo_image_2', 'مميزات شتلات البونيكام'],
+                    ['booking_seo_image_3', 'لماذا يختار المربون البونيكام؟'],
+                    ['booking_seo_image_4', 'دعم فني قبل وبعد الزراعة'],
+                    ['booking_seo_image_5', 'توصيل شتلات البونيكام']
+                  ].map(([field, label]) => {
+                    const selectedUrl = settings[field] || '';
+                    const imageItems = mediaGalleryItems.filter(item => !isVideoUrl(item.image_url));
+                    return (
+                      <div key={field} style={{ marginBottom: '1.25rem', padding: '1rem', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', marginBottom: '0.8rem' }}>
+                          <strong style={{ color: '#0f172a', fontSize: '0.95rem' }}>{label}</strong>
+                          {selectedUrl && (
+                            <button
+                              type="button"
+                              onClick={() => setSettings(prev => ({ ...prev, [field]: '' }))}
+                              style={{ border: 'none', background: '#fee2e2', color: '#b91c1c', borderRadius: '999px', padding: '0.35rem 0.8rem', fontWeight: '800', cursor: 'pointer' }}
+                            >
+                              مسح
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(82px, 1fr))', gap: '8px' }}>
+                          {imageItems.length === 0 ? (
+                            <div style={{ gridColumn: '1 / -1', color: '#94a3b8', textAlign: 'center', padding: '0.8rem' }}>لا توجد صور متاحة في الميديا.</div>
+                          ) : imageItems.map((item, idx) => {
+                            const isSelected = selectedUrl === item.image_url;
+                            return (
+                              <button
+                                type="button"
+                                key={`${field}-${item.id || idx}`}
+                                onClick={() => setSettings(prev => ({ ...prev, [field]: item.image_url }))}
+                                style={{
+                                  position: 'relative',
+                                  cursor: 'pointer',
+                                  borderRadius: '10px',
+                                  overflow: 'hidden',
+                                  border: isSelected ? '3px solid var(--primary-color)' : '2px solid transparent',
+                                  opacity: isSelected ? 1 : 0.72,
+                                  transition: 'all 0.2s',
+                                  height: '74px',
+                                  padding: 0,
+                                  background: '#fff'
+                                }}
+                              >
+                                <img src={normalizeMediaUrl(item.image_url)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                                {isSelected && (
+                                  <span style={{ position: 'absolute', top: '5px', right: '5px', background: 'var(--primary-color)', color: 'white', borderRadius: '50%', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                    <CheckCircle size={15} />
+                                  </span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="form-group" style={{ marginBottom: '2rem' }}>

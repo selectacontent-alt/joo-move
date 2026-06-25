@@ -58,7 +58,18 @@ export async function GET() {
     const pool = await getPool();
     
     const [settingsRows] = await pool.query(
-      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('booking_price_per_qirat', 'booking_trays_per_qirat', 'booking_gallery_images', 'booking_notes')"
+      `SELECT setting_key, setting_value FROM settings
+       WHERE setting_key IN (
+        'booking_price_per_qirat',
+        'booking_trays_per_qirat',
+        'booking_gallery_images',
+        'booking_notes',
+        'booking_seo_image_1',
+        'booking_seo_image_2',
+        'booking_seo_image_3',
+        'booking_seo_image_4',
+        'booking_seo_image_5'
+       )`
     );
     
     const settings = {};
@@ -73,7 +84,14 @@ export async function GET() {
       galleryImages: (() => {
         try { return JSON.parse(settings.booking_gallery_images || '[]'); } catch { return []; }
       })(),
-      notes: settings.booking_notes || ''
+      notes: settings.booking_notes || '',
+      seoImages: {
+        card1: settings.booking_seo_image_1 || '',
+        card2: settings.booking_seo_image_2 || '',
+        card3: settings.booking_seo_image_3 || '',
+        card4: settings.booking_seo_image_4 || '',
+        card5: settings.booking_seo_image_5 || ''
+      }
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });

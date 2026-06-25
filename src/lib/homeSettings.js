@@ -41,5 +41,10 @@ export const DEFAULT_SITE_SETTINGS = {
   booking_price_per_qirat: '120',
   booking_trays_per_qirat: '6',
   booking_notes: 'الشحن مجاني، وسيتم التواصل معك لتأكيد موعد التجهيز والتسليم.',
-  booking_gallery_images: '[]'
+  booking_gallery_images: '[]',
+  booking_seo_image_1: '',
+  booking_seo_image_2: '',
+  booking_seo_image_3: '',
+  booking_seo_image_4: '',
+  booking_seo_image_5: ''
 };
