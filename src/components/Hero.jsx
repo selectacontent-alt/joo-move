@@ -8,8 +8,13 @@ const CountUp = ({ end, duration = 2000, prefix = '', suffix = '' }) => {
   const spanRef = useRef(null);
 
   useEffect(() => {
+    const node = spanRef.current;
+    if (!node || typeof window === 'undefined') return undefined;
+
     let startTimestamp = null;
     let animationFrame;
+    let observer;
+    let hasStarted = false;
 
     const step = (timestamp) => {
       if (!startTimestamp) startTimestamp = timestamp;
@@ -26,9 +31,27 @@ const CountUp = ({ end, duration = 2000, prefix = '', suffix = '' }) => {
       }
     };
 
-    animationFrame = window.requestAnimationFrame(step);
+    const start = () => {
+      if (hasStarted) return;
+      hasStarted = true;
+      animationFrame = window.requestAnimationFrame(step);
+      if (observer) observer.disconnect();
+    };
+
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) start();
+        },
+        { threshold: 0.35 }
+      );
+      observer.observe(node);
+    } else {
+      start();
+    }
 
     return () => {
+      if (observer) observer.disconnect();
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
     };
   }, [end, duration, prefix, suffix]);
