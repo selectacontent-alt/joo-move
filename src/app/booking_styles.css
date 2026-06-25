@@ -1085,8 +1085,8 @@
 }
 
 .checkout-seo-card-image {
-  width: 72px;
-  height: 48px;
+  width: 108px;
+  height: 72px;
   flex: 0 0 auto;
   border-radius: 12px;
   object-fit: cover;
@@ -1209,7 +1209,7 @@
     justify-content: center;
   }
   .checkout-seo-card-image {
-    width: 64px;
-    height: 44px;
+    width: 96px;
+    height: 64px;
   }
 }
