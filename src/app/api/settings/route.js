@@ -7,12 +7,13 @@ import {
   DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
   LEGACY_ORDER_CONFIRMATION_TEMPLATE
 } from '@/lib/whatsappTemplates';
+import { DEFAULT_SITE_SETTINGS } from '@/lib/homeSettings';
 
 export async function GET() {
   try {
     const pool = await getPool();
     const [rows] = await pool.query('SELECT setting_key, setting_value FROM settings');
-    const settings = {};
+    const settings = { ...DEFAULT_SITE_SETTINGS };
     rows.forEach(row => {
       settings[row.setting_key] = repairArabicMojibake(row.setting_value);
     });

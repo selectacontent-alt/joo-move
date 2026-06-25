@@ -1,34 +1,52 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Target, ShieldCheck, Users, Tractor, CheckCircle, Leaf, Globe, Award, ArrowUpLeft } from 'lucide-react';
+import { DEFAULT_SITE_SETTINGS } from '../lib/homeSettings';
 
 const AboutUs = ({ isHomepage = false }) => {
+  const [settings, setSettings] = useState(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings')
+      .then(res => res.ok ? res.json() : DEFAULT_SITE_SETTINGS)
+      .then(data => {
+        if (!cancelled) setSettings({ ...DEFAULT_SITE_SETTINGS, ...data });
+      })
+      .catch(() => {
+        if (!cancelled) setSettings(DEFAULT_SITE_SETTINGS);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const features = [
     {
       icon: Globe,
-      title: 'توريد بمقاييس عالمية',
-      desc: 'شبكة توريد واسعة تضمن وصول المحاصيل والتقاوي بأفضل حالة من المصدر مباشرة.',
+      title: settings.feature_title_1 || DEFAULT_SITE_SETTINGS.feature_title_1,
+      desc: settings.feature_desc_1 || DEFAULT_SITE_SETTINGS.feature_desc_1,
       stat: '+١٢',
       statLabel: 'دولة مصدر',
     },
     {
       icon: Award,
-      title: 'جودة منتقاة بعناية',
-      desc: 'فحوصات دقيقة لضمان خلوها من العيوب وتحقيق أعلى استفادة للمواشي والمحاصيل.',
+      title: settings.feature_title_2 || DEFAULT_SITE_SETTINGS.feature_title_2,
+      desc: settings.feature_desc_2 || DEFAULT_SITE_SETTINGS.feature_desc_2,
       stat: '١٠٠٪',
       statLabel: 'نسبة المطابقة',
     },
     {
       icon: Tractor,
-      title: 'أسطول نقل ضخم',
-      desc: 'جاهزية تامة لنقل آلاف الأطنان بمرونة وسرعة فائقة لأي موقع مهما كان حجم الطلبية.',
+      title: settings.feature_title_3 || DEFAULT_SITE_SETTINGS.feature_title_3,
+      desc: settings.feature_desc_3 || DEFAULT_SITE_SETTINGS.feature_desc_3,
       stat: '+٢٠٠',
       statLabel: 'شاحنة نقل',
     },
     {
       icon: CheckCircle,
-      title: 'استشارات زراعية',
-      desc: 'خبراتنا الاستشارية لمساعدتك في اختيار الأنسب لطبيعة مشروعك ومزرعتك.',
+      title: settings.feature_title_4 || DEFAULT_SITE_SETTINGS.feature_title_4,
+      desc: settings.feature_desc_4 || DEFAULT_SITE_SETTINGS.feature_desc_4,
       stat: '+٥٠',
       statLabel: 'خبير زراعي',
     },
@@ -40,11 +58,9 @@ const AboutUs = ({ isHomepage = false }) => {
         
         {!isHomepage && (
           <div className="elite-about-intro animate-up">
-            <span className="elite-badge-soft"><Leaf size={16} /> مؤسسة الرحاب للتوريدات</span>
-            <h2 className="elite-section-title" style={{color: '#0f172a'}}>خبرة تمتد لسنوات في قطاع المحاصيل والأعلاف</h2>
-            <p className="elite-section-desc" style={{color: '#64748b'}}>
-              انطلقت مؤسسة الرحاب لتكون الركيزة الأساسية لكبار المزارعين ومربي الماشية، حيث نقدم حلولاً متكاملة تبدأ من اختيار أفضل التقاوي وصولاً إلى توريد الأعلاف والمحاصيل بأعلى المعايير العالمية.
-            </p>
+            <span className="elite-badge-soft"><Leaf size={16} /> {settings.about_subtitle || DEFAULT_SITE_SETTINGS.about_subtitle}</span>
+            <h2 className="elite-section-title" style={{color: '#0f172a'}}>{settings.about_title || DEFAULT_SITE_SETTINGS.about_title}</h2>
+            <p className="elite-section-desc" style={{color: '#64748b'}}>{settings.about_text || DEFAULT_SITE_SETTINGS.about_text}</p>
 
             <div className="elite-values-grid">
               <div className="elite-value-card">
@@ -70,8 +86,9 @@ const AboutUs = ({ isHomepage = false }) => {
         <div className="why-us-section" style={{ marginTop: isHomepage ? '-3rem' : '0' }}>
 
           <div className="why-header">
-            <h2 className="elite-section-title">الميزة التنافسية لشركة الرحاب</h2>
-            <p className="elite-section-desc">معايير عالمية نطبقها في كل مرحلة من مراحل التوريد واللوجستيات لضمان التفوق.</p>
+            {settings.why_subtitle && <span className="why-badge">{settings.why_subtitle}</span>}
+            <h2 className="elite-section-title">{settings.why_title || DEFAULT_SITE_SETTINGS.why_title}</h2>
+            <p className="elite-section-desc">{settings.why_desc || DEFAULT_SITE_SETTINGS.why_desc}</p>
           </div>
           
           <div className="why-grid">

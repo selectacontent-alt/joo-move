@@ -5,6 +5,7 @@ import {
   DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
   LEGACY_ORDER_CONFIRMATION_TEMPLATE
 } from './whatsappTemplates';
+import { DEFAULT_SITE_SETTINGS } from './homeSettings';
 
 let pool = global._mysqlPool;
 
@@ -332,20 +333,37 @@ export async function getPool() {
     } else {
       console.warn('ADMIN_USERNAME and ADMIN_PASSWORD are not set; skipping default admin seed.');
     }
-    await pool.query(`INSERT IGNORE INTO settings (setting_key, setting_value) VALUES ('hero_image', 'https://images.unsplash.com/photo-1596591606975-97ee5cef3a1e?q=80&w=1000&auto=format&fit=crop')`);
-    await pool.query(`INSERT INTO settings (setting_key, setting_value) VALUES ('hero_title', 'أناقة طفلك تبدأ من <br/><span class="text-green">الرحاب</span>') ON DUPLICATE KEY UPDATE setting_value = 'أناقة طفلك تبدأ من <br/><span class="text-green">الرحاب</span>'`);
-    await pool.query(`INSERT INTO settings (setting_key, setting_value) VALUES ('hero_desc', 'تشكيلة حصرية من ملابس الأطفال الراقية <br/> تجمع بين الجودة الفائقة والتصاميم المريحة.') ON DUPLICATE KEY UPDATE setting_value = 'تشكيلة حصرية من ملابس الأطفال الراقية <br/> تجمع بين الجودة الفائقة والتصاميم المريحة.'`);
-
     const defaultTemplates = {
-      'admin_whatsapp': '',
       'wa_template_new_order': DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
       'wa_template_booking_order': DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
       'wa_template_shipped': 'مرحباً، طلبك رقم {order_id} تم شحنه وهو في طريقه إليك!',
       'wa_template_delivered': 'مرحباً، نأمل أن يكون طلبك رقم {order_id} قد نال إعجابك. شكراً لتسوقك معنا!'
     };
-    for (const [key, val] of Object.entries(defaultTemplates)) {
+
+    for (const [key, val] of Object.entries({ ...DEFAULT_SITE_SETTINGS, ...defaultTemplates })) {
       await pool.query('INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)', [key, val]);
     }
+    await pool.query(
+      `UPDATE settings
+       SET setting_value = ?
+       WHERE setting_key = 'hero_title'
+         AND (setting_value IS NULL OR setting_value = '' OR setting_value LIKE '%أناقة طفلك%')`,
+      [DEFAULT_SITE_SETTINGS.hero_title]
+    );
+    await pool.query(
+      `UPDATE settings
+       SET setting_value = ?
+       WHERE setting_key = 'hero_desc'
+         AND (setting_value IS NULL OR setting_value = '' OR setting_value LIKE '%ملابس الأطفال%')`,
+      [DEFAULT_SITE_SETTINGS.hero_desc]
+    );
+    await pool.query(
+      `UPDATE settings
+       SET setting_value = ?
+       WHERE setting_key = 'hero_image'
+         AND (setting_value IS NULL OR setting_value = '' OR setting_value LIKE '%unsplash.com%')`,
+      [DEFAULT_SITE_SETTINGS.hero_image]
+    );
     await pool.query(
       `UPDATE settings
        SET setting_value = ?

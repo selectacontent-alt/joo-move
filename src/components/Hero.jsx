@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ArrowLeft, Play, ShieldCheck, TrendingUp, Award } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { DEFAULT_SITE_SETTINGS } from '../lib/homeSettings';
 
 const CountUp = ({ end, duration = 2000, prefix = '', suffix = '' }) => {
   const spanRef = useRef(null);
@@ -248,6 +249,28 @@ const GrassField = () => {
    ════════════════════════════════════════════════════ */
 const Hero = ({ setCurrentPage }) => {
   const { t } = useLanguage();
+  const [settings, setSettings] = useState(DEFAULT_SITE_SETTINGS);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/settings')
+      .then(res => res.ok ? res.json() : DEFAULT_SITE_SETTINGS)
+      .then(data => {
+        if (!cancelled) setSettings({ ...DEFAULT_SITE_SETTINGS, ...data });
+      })
+      .catch(() => {
+        if (!cancelled) setSettings(DEFAULT_SITE_SETTINGS);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const heroImage = settings.hero_image || DEFAULT_SITE_SETTINGS.hero_image;
+  const heroTitle = settings.hero_title || DEFAULT_SITE_SETTINGS.hero_title;
+  const heroDesc = settings.hero_desc || DEFAULT_SITE_SETTINGS.hero_desc;
+  const heroBadge = settings.hero_badge || DEFAULT_SITE_SETTINGS.hero_badge;
 
   return (
     <>
@@ -280,7 +303,6 @@ const Hero = ({ setCurrentPage }) => {
           position: absolute;
           top: 0; left: 0;
           width: 100%; height: 100%;
-          background-image: url("/hero_bg.JPG");
           background-size: cover;
           background-position: center;
           transform: translateZ(0);
@@ -327,6 +349,22 @@ const Hero = ({ setCurrentPage }) => {
           margin-bottom: 1.5rem;
           white-space: nowrap;
           text-shadow: 0 8px 25px rgba(0,0,0,0.5);
+        }
+
+        .elite-hero-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.55rem;
+          color: #d1fae5;
+          background: rgba(16, 185, 129, 0.16);
+          border: 1px solid rgba(167, 243, 208, 0.26);
+          border-radius: 999px;
+          padding: 0.55rem 1.15rem;
+          margin-bottom: 1.25rem;
+          font-size: 0.95rem;
+          font-weight: 800;
+          backdrop-filter: blur(14px);
+          box-shadow: 0 10px 28px rgba(0,0,0,0.18);
         }
 
         .elite-gradient-text {
@@ -505,18 +543,15 @@ const Hero = ({ setCurrentPage }) => {
 
       <div className="elite-hero-container">
         <div className="elite-hero-bg-wrapper">
-          <div className="elite-hero-bg"></div>
+          <div className="elite-hero-bg" style={{ backgroundImage: `url("${heroImage}")` }}></div>
           <div className="elite-overlay"></div>
           <GrassField />
         </div>
 
         <div className="elite-content-wrapper">
-          <h1 className="elite-title">
-            {t('hero.eliteTitle')} <span className="elite-gradient-text">{t('hero.eliteTitleAccent')}</span>
-          </h1>
-          <p className="elite-desc">
-            {t('hero.eliteDesc')}
-          </p>
+          {heroBadge && <div className="elite-hero-badge"><ShieldCheck size={18} /> {heroBadge}</div>}
+          <h1 className="elite-title" dangerouslySetInnerHTML={{ __html: heroTitle }} />
+          <p className="elite-desc" dangerouslySetInnerHTML={{ __html: heroDesc }} />
           <div className="elite-actions">
             <button
               className="elite-btn-primary"
@@ -530,19 +565,19 @@ const Hero = ({ setCurrentPage }) => {
           <div className="stats-grid">
             <div className="elite-stat-item">
               <div className="stat-icon-wrapper"><Award size={24} /></div>
-              <div className="stat-info"><h4><CountUp end={15} prefix="+" duration={2000} /></h4><p>{t('hero.eliteStatYears')}</p></div>
+              <div className="stat-info"><h4><CountUp end={15} prefix="+" duration={2000} /></h4><p>{settings.ticker_text_1 || t('hero.eliteStatYears')}</p></div>
             </div>
             <div className="elite-stat-item">
               <div className="stat-icon-wrapper"><TrendingUp size={24} /></div>
-              <div className="stat-info"><h4><CountUp end={50000} prefix="+" duration={2500} /></h4><p>{t('hero.eliteStatTons')}</p></div>
+              <div className="stat-info"><h4><CountUp end={50000} prefix="+" duration={2500} /></h4><p>{settings.ticker_text_2 || t('hero.eliteStatTons')}</p></div>
             </div>
             <div className="elite-stat-item">
               <div className="stat-icon-wrapper"><ShieldCheck size={24} /></div>
-              <div className="stat-info"><h4><CountUp end={100} suffix="%" duration={2200} /></h4><p>{t('hero.eliteStatQuality')}</p></div>
+              <div className="stat-info"><h4><CountUp end={100} suffix="%" duration={2200} /></h4><p>{settings.ticker_text_3 || t('hero.eliteStatQuality')}</p></div>
             </div>
             <div className="elite-stat-item">
               <div className="stat-icon-wrapper"><ArrowLeft size={24} /></div>
-              <div className="stat-info"><h4><CountUp end={500} prefix="+" duration={2300} /></h4><p>{t('hero.eliteStatClients')}</p></div>
+              <div className="stat-info"><h4><CountUp end={500} prefix="+" duration={2300} /></h4><p>{settings.ticker_text_4 || t('hero.eliteStatClients')}</p></div>
             </div>
           </div>
         </div>

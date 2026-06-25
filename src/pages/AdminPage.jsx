@@ -317,6 +317,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
     about_text: '',
     why_subtitle: '',
     why_title: '',
+    why_desc: '',
     feature_title_1: '',
     feature_desc_1: '',
     feature_title_2: '',
@@ -2851,6 +2852,10 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                           <label style={{ fontWeight: '700' }}>{t('admin.settingsWhyTitleLabel')}</label>
                           <input type="text" name="why_title" value={settings.why_title || ''} onChange={handleSettingsChange} className="admin-input" placeholder={t('admin.settingsWhyTitlePlaceholder')} />
                         </div>
+                      </div>
+                      <div className="admin-form-group" style={{ marginTop: '1.2rem' }}>
+                        <label style={{ fontWeight: '700' }}>وصف قسم لماذا الرحاب</label>
+                        <textarea name="why_desc" value={settings.why_desc || ''} onChange={handleSettingsChange} className="admin-input" rows="3" placeholder="اكتب وصفاً مختصراً يظهر أسفل عنوان قسم لماذا تختار الرحاب" style={{ resize: 'vertical' }}></textarea>
                       </div>
                     </div>
 
