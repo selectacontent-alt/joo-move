@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { ArrowLeft, Play, ShieldCheck, TrendingUp, Award } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { DEFAULT_SITE_SETTINGS } from '../lib/homeSettings';
+import { normalizeMediaUrl } from '../lib/mediaUtils';
 
 const CountUp = ({ end, duration = 2000, prefix = '', suffix = '' }) => {
   const spanRef = useRef(null);
@@ -267,7 +268,7 @@ const Hero = ({ setCurrentPage }) => {
     };
   }, []);
 
-  const heroImage = settings.hero_image || DEFAULT_SITE_SETTINGS.hero_image;
+  const heroImage = normalizeMediaUrl(settings.hero_image || DEFAULT_SITE_SETTINGS.hero_image);
   const heroTitle = settings.hero_title || DEFAULT_SITE_SETTINGS.hero_title;
   const heroDesc = settings.hero_desc || DEFAULT_SITE_SETTINGS.hero_desc;
   const heroBadge = settings.hero_badge || DEFAULT_SITE_SETTINGS.hero_badge;
@@ -303,11 +304,19 @@ const Hero = ({ setCurrentPage }) => {
           position: absolute;
           top: 0; left: 0;
           width: 100%; height: 100%;
-          background-size: cover;
-          background-position: center;
           transform: translateZ(0);
           will-change: transform;
           animation: slowZoom 25s ease-in-out infinite alternate;
+        }
+
+        .elite-hero-bg-img {
+          width: 100%;
+          height: 100%;
+          display: block;
+          object-fit: cover;
+          object-position: center 45%;
+          opacity: 0.86;
+          filter: saturate(1.12) contrast(1.05);
         }
 
         @keyframes slowZoom {
@@ -321,9 +330,9 @@ const Hero = ({ setCurrentPage }) => {
           width: 100%; height: 100%;
           background: linear-gradient(
             180deg,
-            rgba(2,6,23,0.3) 0%,
-            rgba(2,6,23,0.7) 50%,
-            rgba(2,6,23,0.95) 100%
+            rgba(2,6,23,0.18) 0%,
+            rgba(2,6,23,0.48) 48%,
+            rgba(2,6,23,0.88) 100%
           );
           z-index: 1;
         }
@@ -502,7 +511,7 @@ const Hero = ({ setCurrentPage }) => {
             height: calc(100% + 100px);
           }
           .elite-overlay {
-            background: linear-gradient(180deg,rgba(2,6,23,0.9),rgba(2,6,23,0.85));
+            background: linear-gradient(180deg,rgba(2,6,23,0.72),rgba(2,6,23,0.8));
             height: 100%;
           }
           .elite-hero-container { 
@@ -518,7 +527,7 @@ const Hero = ({ setCurrentPage }) => {
           .elite-hero-container { margin-bottom: 100px !important; }
           .hero-grass-canvas { bottom: -5px; height: 150px; }
           .elite-overlay {
-            background: linear-gradient(180deg, rgba(2,6,23,0.9) 0%, rgba(2,6,23,0.85) 50%, rgba(2,6,23,0.95) 100%);
+            background: linear-gradient(180deg, rgba(2,6,23,0.72) 0%, rgba(2,6,23,0.8) 50%, rgba(2,6,23,0.95) 100%);
           }
           .elite-stats-bar { position: absolute; background: #020617; padding: 0; border-top: none; width: 100%; bottom: 0; transform: translateY(100%); margin-top: 0; z-index: 10; border-bottom: 1px solid rgba(255,255,255,0.05); }
           .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid rgba(255,255,255,0.05); }
@@ -543,7 +552,18 @@ const Hero = ({ setCurrentPage }) => {
 
       <div className="elite-hero-container">
         <div className="elite-hero-bg-wrapper">
-          <div className="elite-hero-bg" style={{ backgroundImage: `url("${heroImage}")` }}></div>
+          <div className="elite-hero-bg">
+            <img
+              src={heroImage}
+              alt=""
+              className="elite-hero-bg-img"
+              onError={(event) => {
+                const fallback = normalizeMediaUrl(DEFAULT_SITE_SETTINGS.hero_image);
+                if (event.currentTarget.src.endsWith(fallback)) return;
+                event.currentTarget.src = fallback;
+              }}
+            />
+          </div>
           <div className="elite-overlay"></div>
           <GrassField />
         </div>
