@@ -28,7 +28,7 @@
   --booking-gold: #d2a94f;
   background: radial-gradient(circle at 8% 18%, rgba(210,169,79,0.08), transparent 26rem), linear-gradient(180deg, #f7faf4 0%, #fcfdf9 48%, #f4f8f1 100%);
   min-height: 100vh;
-  padding-top: 88px;
+  padding-top: 0;
   color: var(--booking-ink);
 }
 
@@ -759,7 +759,7 @@
 @media (max-width: 767px) {
   /* --- Page wrapper --- */
   .booking-page {
-    padding-top: 68px;
+    padding-top: 0;
     padding-bottom: calc(96px + env(safe-area-inset-bottom));
   }
 
@@ -973,7 +973,7 @@
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
-  .booking-page { padding-top: 82px; }
+  .booking-page { padding-top: 0; }
   .booking-hero { min-height: 390px; padding: 4rem 2rem 5rem; }
   .booking-gallery-section,
   .booking-form-section { padding-inline: 2rem; }
