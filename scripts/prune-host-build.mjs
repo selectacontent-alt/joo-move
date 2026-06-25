@@ -3,13 +3,23 @@ import path from 'node:path';
 
 const root = process.cwd();
 
-const removeInsideRoot = (relativePath) => {
+const isLockedMountError = (error) => error?.code === 'EBUSY' || error?.code === 'ENOTEMPTY';
+
+const removeInsideRoot = (relativePath, options = {}) => {
   const target = path.resolve(root, relativePath);
   if (!target.startsWith(root + path.sep)) {
     throw new Error(`Refusing to remove path outside project: ${target}`);
   }
-  fs.rmSync(target, { recursive: true, force: true });
-  console.log(`[prune] Removed ${relativePath}`);
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+    console.log(`[prune] Removed ${relativePath}`);
+  } catch (error) {
+    if (options.skipLocked && isLockedMountError(error)) {
+      console.warn(`[prune] Skipped locked mount: ${relativePath}`);
+      return;
+    }
+    throw error;
+  }
 };
 
 const removeNodeModulesExceptMountedCache = () => {
@@ -21,7 +31,7 @@ const removeNodeModulesExceptMountedCache = () => {
     try {
       removeInsideRoot(relativePath);
     } catch (error) {
-      if (entry === '.cache' && (error?.code === 'EBUSY' || error?.code === 'ENOTEMPTY')) {
+      if (entry === '.cache' && isLockedMountError(error)) {
         console.warn('[prune] Skipped locked node_modules/.cache mount.');
         continue;
       }
@@ -32,7 +42,7 @@ const removeNodeModulesExceptMountedCache = () => {
   try {
     removeInsideRoot('node_modules');
   } catch (error) {
-    if (error?.code === 'EBUSY' || error?.code === 'ENOTEMPTY') {
+    if (isLockedMountError(error)) {
       console.warn('[prune] Kept node_modules shell because a build cache mount is locked.');
       return;
     }
@@ -45,5 +55,5 @@ if (!fs.existsSync(path.join(root, '.next', 'standalone', 'server.js'))) {
 }
 
 removeNodeModulesExceptMountedCache();
-removeInsideRoot(path.join('.next', 'cache'));
-removeInsideRoot('.wwebjs_cache');
+removeInsideRoot(path.join('.next', 'cache'), { skipLocked: true });
+removeInsideRoot('.wwebjs_cache', { skipLocked: true });
