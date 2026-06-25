@@ -5,6 +5,7 @@ import '../app/globals.css';
 import { useLanguage } from '../contexts/LanguageContext';
 import { fetchJsonCached } from '../lib/prefetchCache';
 import ImageWithSkeleton from './ImageWithSkeleton';
+import { isVideoUrl, normalizeMediaUrl } from '../lib/mediaUtils';
 
 
 const MediaGallery = () => {
@@ -46,8 +47,9 @@ const MediaGallery = () => {
       .then(data => {
         const formattedData = Array.isArray(data) ? data.map((item) => ({
           ...item,
-          url: item.image_url,
-          thumbUrl: item.image_url
+          url: normalizeMediaUrl(item.image_url),
+          thumbUrl: normalizeMediaUrl(item.image_url),
+          isVideo: isVideoUrl(item.image_url)
         })) : [];
         setMediaItems(formattedData);
         setLoading(false);
@@ -123,7 +125,11 @@ const MediaGallery = () => {
         <div className="media-lightbox" onClick={() => setSelectedImg(null)}>
            <button className="close-lightbox" aria-label={t('media.close')}><X size={32}/></button>
            <div className="lightbox-content-wrapper" onClick={e => e.stopPropagation()}>
-               <img src={selectedImg.url} alt={selectedImg.title} className="lightbox-img" />
+               {selectedImg.isVideo ? (
+                 <video src={selectedImg.url} className="lightbox-img" controls playsInline preload="metadata" />
+               ) : (
+                 <img src={selectedImg.url} alt={selectedImg.title} className="lightbox-img" />
+               )}
            </div>
         </div>,
         document.body

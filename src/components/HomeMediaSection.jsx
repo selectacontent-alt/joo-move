@@ -5,6 +5,7 @@ import { X, Images, ChevronLeft, ZoomIn, Eye } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { fetchJsonCached } from '../lib/prefetchCache';
 import ImageWithSkeleton from './ImageWithSkeleton';
+import { isVideoUrl, normalizeMediaUrl } from '../lib/mediaUtils';
 
 
 
@@ -21,7 +22,12 @@ const HomeMediaSection = ({ setCurrentPage }) => {
     fetchJsonCached('/api/media/homepage')
       .then(data => {
         const fmt = Array.isArray(data)
-          ? data.map(item => ({ ...item, url: item.image_url, thumbUrl: item.image_url }))
+          ? data.map(item => ({
+            ...item,
+            url: normalizeMediaUrl(item.image_url),
+            thumbUrl: normalizeMediaUrl(item.image_url),
+            isVideo: isVideoUrl(item.image_url)
+          }))
           : [];
         setItems(fmt);
         setLoading(false);
@@ -137,7 +143,11 @@ const HomeMediaSection = ({ setCurrentPage }) => {
             <X size={22} />
           </button>
           <div className="hms-lb-inner" onClick={e => e.stopPropagation()}>
-            <img src={lightbox.url} alt={lightbox.title} className="hms-lb-media" />
+            {lightbox.isVideo ? (
+              <video src={lightbox.url} className="hms-lb-media" controls playsInline preload="metadata" />
+            ) : (
+              <img src={lightbox.url} alt={lightbox.title} className="hms-lb-media" />
+            )}
             {lightbox.title && <p className="hms-lb-caption">{lightbox.title}</p>}
           </div>
         </div>,
