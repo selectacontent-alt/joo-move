@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { resolveUploadedFile } from '@/lib/uploadStorage';
 
 const mimeTypes = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',
+  '.jfif': 'image/jpeg',
   '.gif': 'image/gif',
   '.svg': 'image/svg+xml',
   '.webp': 'image/webp',
@@ -17,19 +19,20 @@ const mimeTypes = {
 
 export async function GET(request, { params }) {
   try {
-    const { path: filePathParams } = params;
+    const { path: filePathParams } = await params;
     const filename = filePathParams.join('/');
-    const uploadsDir = path.resolve(process.cwd(), 'public', 'uploads');
-    const filePath = path.resolve(uploadsDir, filename);
 
-    if (!filePath.startsWith(`${uploadsDir}${path.sep}`)) {
+    if (filename.includes('\0') || filename.includes('..')) {
       return NextResponse.json({ error: 'Invalid file path' }, { status: 400 });
     }
 
-    if (!fs.existsSync(filePath)) {
+    const resolved = resolveUploadedFile(filename);
+
+    if (!resolved) {
       return NextResponse.json({ error: 'File not found' }, { status: 404 });
     }
 
+    const { filePath } = resolved;
     const ext = path.extname(filePath).toLowerCase();
     const contentType = mimeTypes[ext] || 'application/octet-stream';
     const stat = fs.statSync(filePath);

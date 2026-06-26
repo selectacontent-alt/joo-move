@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import path from 'path';
-import fs from 'fs';
+import { writeUploadedFile } from '@/lib/uploadStorage';
 
 const IMAGE_LIMIT_BYTES = 5 * 1024 * 1024;
 const VIDEO_LIMIT_BYTES = 10 * 1024 * 1024;
-const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.svg']);
+const ALLOWED_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.jfif', '.png', '.webp', '.gif', '.svg']);
 const ALLOWED_VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov', '.m4v']);
 
 export async function POST(request) {
@@ -36,16 +36,10 @@ export async function POST(request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
     const safeExt = ext || (isVideo ? '.mp4' : '.jpg');
     const filename = `${Date.now()}-${Math.round(Math.random() * 1E9)}${safeExt}`;
-    const filePath = path.join(uploadDir, filename);
 
-    await fs.promises.writeFile(filePath, buffer);
+    await writeUploadedFile(filename, buffer);
 
     return NextResponse.json({ url: `/uploads/${filename}`, type: isVideo ? 'video' : 'image' });
   } catch (err) {

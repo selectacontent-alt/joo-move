@@ -19,6 +19,7 @@ import MediaGallery from './components/MediaGallery';
 import HomeMediaSection from './components/HomeMediaSection';
 import B2BFeatures from './components/B2BFeatures';
 import CallToAction from './components/CallToAction';
+import BonicamHomeSection from './components/BonicamHomeSection';
 import BookingPage from './components/BookingPage';
 import FulfillmentPage from './pages/FulfillmentPage';
 import { useLanguage } from './contexts/LanguageContext';
@@ -290,6 +291,7 @@ function App() { const { language, t } = useLanguage();
     return (
       <>
         <Hero setCurrentPage={navigate} />
+        <BonicamHomeSection setCurrentPage={navigate} />
         <B2BFeatures setCurrentPage={navigate} />
         <AboutUs isHomepage={true} />
         <CallToAction setCurrentPage={navigate} />
@@ -406,6 +408,7 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
   const [message, setMessage] = useState('');
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   const isFooterVisible = useFooterVisibility();
   const [waNumber, setWaNumber] = useState('201127847539');
   const [settings, setSettings] = useState({
@@ -455,6 +458,31 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
     };
   }, []);
 
+  useEffect(() => {
+    const updateKeyboardOffset = () => {
+      const viewport = window.visualViewport;
+      if (!viewport) {
+        setKeyboardOffset(0);
+        return;
+      }
+
+      const hiddenHeight = window.innerHeight - viewport.height - viewport.offsetTop;
+      setKeyboardOffset(Math.max(0, Math.round(hiddenHeight)));
+    };
+
+    updateKeyboardOffset();
+
+    window.visualViewport?.addEventListener('resize', updateKeyboardOffset);
+    window.visualViewport?.addEventListener('scroll', updateKeyboardOffset);
+    window.addEventListener('resize', updateKeyboardOffset);
+
+    return () => {
+      window.visualViewport?.removeEventListener('resize', updateKeyboardOffset);
+      window.visualViewport?.removeEventListener('scroll', updateKeyboardOffset);
+      window.removeEventListener('resize', updateKeyboardOffset);
+    };
+  }, []);
+
   const handleSend = () => {
     const text = message.trim() ? encodeURIComponent(message) : encodeURIComponent(t('whatsapp.helpMessage'));
     window.open(`https://api.whatsapp.com/send?phone=${waNumber}&text=${text}`, '_blank');
@@ -470,11 +498,12 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
   const canShowDock = currentPage !== 'checkout' && !isFooterVisible && !isCartOpen;
 
   return (
-    <div className="floating-actions-dock" style={{ 
+    <div className={`floating-actions-dock${isOpen ? ' whatsapp-dock-open' : ''}${keyboardOffset > 40 ? ' whatsapp-keyboard-open' : ''}`} style={{ 
       opacity: canShowDock ? 1 : 0,
       pointerEvents: canShowDock ? 'auto' : 'none',
       transition: 'opacity 0.3s ease, transform 0.3s ease',
-      transform: canShowDock ? 'translateY(0)' : 'translateY(20px)'
+      transform: canShowDock ? 'translateY(0)' : 'translateY(20px)',
+      '--keyboard-offset': `${isOpen ? keyboardOffset : 0}px`
     }}>
       {/* Social Media Buttons */}
       {settings.facebook_link && (
@@ -513,10 +542,7 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
       {/* Interactive WhatsApp Widget */}
       <div style={{ position: 'relative', display: (!isProductModalOpen) ? 'block' : 'none' }}>
         {isOpen && (
-          <div className="animate-up" style={{ 
-            position: 'fixed', 
-            bottom: '7rem', 
-            right: '2rem', 
+          <div className="whatsapp-chat-panel animate-up" style={{ 
             width: '320px', 
             background: '#ffffff', 
             borderRadius: '20px', 
@@ -526,7 +552,7 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
             transformOrigin: 'bottom right'
           }}>
             {/* Header */}
-            <div style={{ background: '#059669', padding: '1.2rem', display: 'flex', alignItems: 'center', gap: '1rem', color: 'white' }}>
+            <div className="whatsapp-chat-header" style={{ background: '#059669', padding: '1.2rem', display: 'flex', alignItems: 'center', gap: '1rem', color: 'white' }}>
               <div style={{ width: '45px', height: '45px', background: 'white', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px' }}>
                 <img src="/logo.png" alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />
               </div>
@@ -540,15 +566,15 @@ const WhatsAppWidget = ({ cartItems = [], currentPage }) => {
             </div>
             
             {/* Chat Body */}
-            <div style={{ padding: '1.5rem', background: '#e5e5f7', backgroundImage: 'radial-gradient(#444cf7 0.5px, transparent 0.5px), radial-gradient(#444cf7 0.5px, #e5e5f7 0.5px)', backgroundSize: '20px 20px', backgroundPosition: '0 0,10px 10px', opacity: 0.9, minHeight: '150px', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ background: 'white', padding: '1rem', borderRadius: '0 15px 15px 15px', color: '#1e293b', fontSize: '0.95rem', lineHeight: '1.5', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', maxWidth: '85%' }}>
+            <div className="whatsapp-chat-body" style={{ padding: '1.5rem', background: '#e5e5f7', backgroundImage: 'radial-gradient(#444cf7 0.5px, transparent 0.5px), radial-gradient(#444cf7 0.5px, #e5e5f7 0.5px)', backgroundSize: '20px 20px', backgroundPosition: '0 0,10px 10px', opacity: 0.9, minHeight: '150px', display: 'flex', flexDirection: 'column' }}>
+              <div className="whatsapp-message-bubble" style={{ background: 'rgba(255,255,255,0.9)', padding: '1rem', borderRadius: '0 15px 15px 15px', color: '#1e293b', fontSize: '0.95rem', lineHeight: '1.5', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(0,0,0,0.05)', maxWidth: '85%' }}>
                 <span suppressHydrationWarning dangerouslySetInnerHTML={{ __html: t('whatsapp.welcome') }} />
                 <span style={{ display: 'block', fontSize: '0.7rem', color: '#94a3b8', marginTop: '5px', textAlign: 'left' }}>{t('whatsapp.now')}</span>
               </div>
             </div>
 
             {/* Input Area */}
-            <div style={{ padding: '1rem', background: 'white', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+            <div className="whatsapp-chat-input" style={{ padding: '1rem', background: 'white', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
               <input 
                 type="text" 
                 placeholder={t('whatsapp.placeholder')} 

@@ -6594,13 +6594,58 @@ img {
 /* Floating Actions Dock Styling */
 .floating-actions-dock {
   position: fixed;
-  bottom: 2rem;
-  right: 1.5rem;
+  bottom: calc(2rem + var(--keyboard-offset, 0px));
+  right: calc(1.5rem + env(safe-area-inset-right, 0px));
   z-index: 9998;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
   align-items: center;
+}
+
+.whatsapp-chat-panel {
+  position: fixed;
+  bottom: calc(7rem + var(--keyboard-offset, 0px));
+  right: calc(2rem + env(safe-area-inset-right, 0px));
+  display: flex;
+  flex-direction: column;
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  z-index: 9999;
+}
+
+.whatsapp-chat-header,
+.whatsapp-chat-input {
+  flex: 0 0 auto;
+}
+
+.whatsapp-chat-body {
+  position: relative;
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.whatsapp-chat-body::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url('/s-logo.png');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(58%, 220px);
+  opacity: 0.1;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.whatsapp-chat-body > * {
+  position: relative;
+  z-index: 1;
+}
+
+.whatsapp-message-bubble {
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
 }
 
 .floating-action-btn {
@@ -6644,9 +6689,32 @@ img {
 
 @media (max-width: 768px) {
   .floating-actions-dock {
-    bottom: 1rem;
-    right: 1rem;
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-offset, 0px));
+    right: calc(1rem + env(safe-area-inset-right, 0px));
     gap: 0.5rem;
+  }
+  .whatsapp-chat-panel {
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-offset, 0px));
+    right: calc(1rem + env(safe-area-inset-right, 0px));
+    width: calc(100vw - 2rem) !important;
+    max-width: 360px;
+    max-height: calc(100dvh - 1.25rem);
+  }
+  .whatsapp-dock-open {
+    z-index: 10000;
+  }
+  .whatsapp-keyboard-open .whatsapp-chat-panel {
+    top: calc(0.75rem + env(safe-area-inset-top, 0px));
+    bottom: calc(4.75rem + env(safe-area-inset-bottom, 0px) + var(--keyboard-offset, 0px));
+    max-height: none;
+  }
+  .whatsapp-keyboard-open .whatsapp-chat-body {
+    min-height: 96px !important;
+    padding: 1rem !important;
+  }
+  .whatsapp-keyboard-open .whatsapp-chat-header,
+  .whatsapp-keyboard-open .whatsapp-chat-input {
+    padding: 0.85rem 1rem !important;
   }
   .floating-action-btn {
     width: 36px;
