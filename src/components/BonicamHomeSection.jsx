@@ -58,8 +58,8 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
               علف أخضر عالي الإنتاجية
             </span>
             <h2>
-              البونيكام البرازيلي من أفضل
-              <span> محاصيل الأعلاف الخضراء</span>
+              <span className="bonicam-title-line">البونيكام البرازيلي من أفضل</span>
+              <span className="bonicam-title-line bonicam-title-accent">محاصيل الأعلاف الخضراء</span>
             </h2>
             <p>
               اختيار عملي للمزارع والمربي الباحث عن علف قوي، سريع النمو، متكرر الحشات،
@@ -83,10 +83,15 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
 
           <div className="bonicam-visual" aria-hidden="true">
             <div className="bonicam-sun"><Sun size={34} /></div>
-            <div className="bonicam-leaf-stack">
-              <Leaf className="bonicam-leaf bonicam-leaf-a" size={138} />
-              <Leaf className="bonicam-leaf bonicam-leaf-b" size={110} />
-              <Wheat className="bonicam-wheat" size={128} />
+            <div className="bonicam-logo-stage">
+              <img
+                src="/logo.png"
+                alt=""
+                className="bonicam-company-logo"
+                onError={(event) => {
+                  event.currentTarget.style.display = 'none';
+                }}
+              />
             </div>
             <div className="bonicam-yield-badge">
               <strong>+ إنتاج</strong>
@@ -236,14 +241,18 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           max-width: 780px;
           margin: 0 0 1rem;
           color: #102017;
-          font-size: clamp(2.25rem, 5vw, 4.15rem);
+          font-size: clamp(1.85rem, 3.6vw, 3rem);
           font-weight: 950;
-          line-height: 1.12;
+          line-height: 1.18;
           letter-spacing: 0;
         }
 
-        .bonicam-copy h2 span {
+        .bonicam-title-line {
           display: block;
+          white-space: nowrap;
+        }
+
+        .bonicam-title-accent {
           color: #17803b;
         }
 
@@ -341,32 +350,32 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           box-shadow: 0 0 40px rgba(253, 230, 138, 0.22);
         }
 
-        .bonicam-leaf-stack {
+        .bonicam-logo-stage {
           position: absolute;
           inset: 0;
-          display: grid;
-          place-items: center;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2.25rem;
         }
 
-        .bonicam-leaf,
-        .bonicam-wheat {
+        .bonicam-logo-stage::before {
+          content: '';
           position: absolute;
-          color: rgba(167, 243, 208, 0.88);
-          filter: drop-shadow(0 18px 32px rgba(0,0,0,0.22));
+          width: min(72%, 260px);
+          aspect-ratio: 1;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 62%, transparent 72%);
+          box-shadow: 0 26px 70px rgba(0,0,0,0.18);
         }
 
-        .bonicam-leaf-a {
-          transform: translate(22px, -18px) rotate(-22deg);
-        }
-
-        .bonicam-leaf-b {
-          color: rgba(181, 217, 65, 0.78);
-          transform: translate(-54px, 28px) rotate(28deg);
-        }
-
-        .bonicam-wheat {
-          color: rgba(255,255,255,0.82);
-          transform: translate(34px, 82px) rotate(-10deg);
+        .bonicam-company-logo {
+          position: relative;
+          z-index: 1;
+          width: min(78%, 300px);
+          max-height: 235px;
+          object-fit: contain;
+          filter: drop-shadow(0 18px 34px rgba(0,0,0,0.32));
         }
 
         .bonicam-yield-badge {
@@ -470,7 +479,7 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
 
         .bonicam-services-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 0.85rem;
         }
 
@@ -563,7 +572,7 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           }
 
           .bonicam-copy h2 {
-            font-size: clamp(1.9rem, 9vw, 2.45rem);
+            font-size: clamp(1.35rem, 5.8vw, 1.85rem);
           }
 
           .bonicam-copy p {
@@ -589,14 +598,35 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
             border-radius: 20px;
           }
 
-          .bonicam-benefits-grid,
           .bonicam-lower-grid,
           .bonicam-services-grid {
             grid-template-columns: 1fr;
           }
 
+          .bonicam-benefits-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 0.65rem;
+          }
+
           .bonicam-benefit-card {
             min-height: 112px;
+            padding: 0.9rem 0.75rem;
+          }
+
+          .bonicam-card-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 0.7rem;
+          }
+
+          .bonicam-card-icon svg {
+            width: 20px;
+            height: 20px;
+          }
+
+          .bonicam-benefit-card h3 {
+            font-size: 0.82rem;
+            line-height: 1.45;
           }
 
           .bonicam-services-panel,

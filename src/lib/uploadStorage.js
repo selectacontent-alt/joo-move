@@ -7,12 +7,17 @@ const addCandidate = (candidates, dir) => {
   if (!candidates.includes(resolved)) candidates.push(resolved);
 };
 
+const defaultPersistentUploadDir = '/data/uploads';
+
 export function getUploadDirCandidates() {
   const candidates = [];
   const cwd = process.cwd();
   const isStandaloneCwd = path.basename(cwd) === 'standalone' && path.basename(path.dirname(cwd)) === '.next';
 
   addCandidate(candidates, process.env.UPLOAD_DIR);
+  addCandidate(candidates, defaultPersistentUploadDir);
+  addCandidate(candidates, '/mnt/data/uploads');
+  addCandidate(candidates, '/app/data/uploads');
   addCandidate(candidates, path.join(cwd, 'public', 'uploads'));
   addCandidate(candidates, path.join(cwd, '.next', 'standalone', 'public', 'uploads'));
   if (isStandaloneCwd) {
@@ -20,13 +25,19 @@ export function getUploadDirCandidates() {
   }
   addCandidate(candidates, '/app/public/uploads');
   addCandidate(candidates, '/app/.next/standalone/public/uploads');
-  addCandidate(candidates, '/data/uploads');
-  addCandidate(candidates, '/mnt/data/uploads');
 
   return candidates;
 }
 
 export function getWritableUploadsDir() {
+  if (process.env.UPLOAD_DIR) {
+    return path.resolve(process.env.UPLOAD_DIR);
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return path.resolve(defaultPersistentUploadDir);
+  }
+
   const candidates = getUploadDirCandidates();
   const existing = candidates.find((dir) => {
     try {
@@ -36,7 +47,7 @@ export function getWritableUploadsDir() {
     }
   });
 
-  return existing || candidates[0] || path.join(process.cwd(), 'public', 'uploads');
+  return existing || path.join(process.cwd(), 'public', 'uploads');
 }
 
 export function resolveUploadedFile(filename) {
