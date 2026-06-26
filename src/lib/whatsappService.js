@@ -7,6 +7,7 @@ import { getPuppeteerLaunchOptions } from './puppeteerConfig';
 const DEFAULT_AUTH_FOLDER = '.wwebjs_auth';
 const DEFAULT_QUEUE_FOLDER = '.wwebjs_queue';
 const QUEUE_FILE_NAME = 'messages.json';
+const DEFAULT_CLIENT_ID = 'al-rehab-client';
 
 const QUEUE_MIN_DELAY_MS = readPositiveIntEnv('WHATSAPP_QUEUE_MIN_DELAY_MS', 5000);
 const QUEUE_MAX_DELAY_MS = Math.max(
@@ -68,6 +69,22 @@ function sleep(ms) {
 
 function getErrorMessage(error) {
   return error?.message || String(error || '');
+}
+
+function getWhatsappClientId() {
+  const rawClientId = String(process.env.WHATSAPP_CLIENT_ID || DEFAULT_CLIENT_ID).trim();
+  const safeClientId = rawClientId
+    .replace(/[^A-Za-z0-9_-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^[-_]+|[-_]+$/g, '');
+
+  const clientId = safeClientId || DEFAULT_CLIENT_ID;
+
+  if (rawClientId !== clientId) {
+    console.warn(`[WhatsApp] Sanitized WHATSAPP_CLIENT_ID to "${clientId}". Only letters, numbers, underscores and hyphens are allowed.`);
+  }
+
+  return clientId;
 }
 
 function isAuthTimeoutMessage(message) {
@@ -388,7 +405,7 @@ function scheduleFreshLinkingSession(reason, options = {}) {
   }
 
   const authDir = getAuthDir();
-  const clientId = process.env.WHATSAPP_CLIENT_ID || 'Al Rehab-client';
+  const clientId = getWhatsappClientId();
 
   state.isRestarting = true;
   state.status = 'DISCONNECTED';
@@ -457,7 +474,7 @@ function handleInitializationError(error) {
 
   if (message.includes('The browser is already running')) {
     const authDir = getAuthDir();
-    const clientId = process.env.WHATSAPP_CLIENT_ID || 'Al Rehab-client';
+    const clientId = getWhatsappClientId();
     console.log('[Auto-Fix] Detected stuck WhatsApp browser session. Cleaning locks...');
     killStuckBrowserForSession(authDir, clientId);
     clearBrowserLock(authDir, clientId);
@@ -492,7 +509,7 @@ export function initializeWhatsApp(options = {}) {
   console.log('Initializing WhatsApp Client...');
 
   const authDir = getAuthDir();
-  const clientId = process.env.WHATSAPP_CLIENT_ID || 'Al Rehab-client';
+  const clientId = getWhatsappClientId();
   clearBrowserLock(authDir, clientId);
 
   state.client = new Client({
@@ -700,7 +717,7 @@ export async function logout() {
   }
 
   const authDir = getAuthDir();
-  const clientId = process.env.WHATSAPP_CLIENT_ID || 'Al Rehab-client';
+  const clientId = getWhatsappClientId();
   killStuckBrowserForSession(authDir, clientId);
   clearAuthSession(authDir, clientId);
   state.status = 'DISCONNECTED';
@@ -769,7 +786,7 @@ export async function restartLinkingSession() {
     }
 
     const authDir = getAuthDir();
-    const clientId = process.env.WHATSAPP_CLIENT_ID || 'Al Rehab-client';
+    const clientId = getWhatsappClientId();
     const existingClient = state.client;
 
     state.isRestarting = true;
