@@ -41,7 +41,14 @@ const BookingPage = ({ setCurrentPage }) => {
   useEffect(() => {
     fetchJsonCached('/api/booking')
       .then(data => {
-        setConfig(data);
+        const galleryImages = Array.isArray(data?.galleryImages)
+          ? data.galleryImages.map(normalizeMediaUrl).filter(Boolean)
+          : [];
+
+        setConfig({
+          ...data,
+          galleryImages
+        });
         setIsLoading(false);
       })
       .catch(err => {
@@ -49,6 +56,12 @@ const BookingPage = ({ setCurrentPage }) => {
         setIsLoading(false);
       });
   }, []);
+
+  useEffect(() => {
+    if (activeImageIndex >= config.galleryImages.length) {
+      setActiveImageIndex(0);
+    }
+  }, [activeImageIndex, config.galleryImages.length]);
 
   useEffect(() => {
     const viewport = window.visualViewport;
