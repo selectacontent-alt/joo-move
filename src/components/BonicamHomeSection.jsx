@@ -93,10 +93,6 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
                 }}
               />
             </div>
-            <div className="bonicam-yield-badge">
-              <strong>+ إنتاج</strong>
-              <span>حشات متكررة وجودة ثابتة</span>
-            </div>
           </div>
         </div>
 
@@ -314,9 +310,9 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           min-height: 360px;
           border-radius: 26px;
           background:
-            radial-gradient(circle at 50% 24%, rgba(251, 191, 36, 0.18), transparent 22%),
-            linear-gradient(180deg, #145a24 0%, #0b3d24 100%);
-          box-shadow: inset 0 0 0 1px rgba(255,255,255,0.1), 0 20px 60px rgba(20, 90, 36, 0.18);
+            radial-gradient(circle at 50% 26%, rgba(34, 197, 94, 0.12), transparent 28%),
+            linear-gradient(180deg, #ffffff 0%, #f8fbf5 100%);
+          box-shadow: inset 0 0 0 1px rgba(20, 90, 36, 0.1), 0 20px 60px rgba(20, 90, 36, 0.12);
           overflow: hidden;
         }
 
@@ -329,7 +325,7 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           height: 45%;
           background: repeating-linear-gradient(
             88deg,
-            rgba(167, 243, 208, 0.2) 0 4px,
+            rgba(20, 90, 36, 0.14) 0 4px,
             transparent 5px 18px
           );
           transform: perspective(500px) rotateX(58deg);
@@ -345,9 +341,9 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           display: grid;
           place-items: center;
           border-radius: 50%;
-          background: rgba(254, 240, 138, 0.16);
-          color: #fde68a;
-          box-shadow: 0 0 40px rgba(253, 230, 138, 0.22);
+          background: rgba(254, 240, 138, 0.42);
+          color: #ca8a04;
+          box-shadow: 0 0 36px rgba(253, 230, 138, 0.24);
         }
 
         .bonicam-logo-stage {
@@ -365,8 +361,8 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           width: min(72%, 260px);
           aspect-ratio: 1;
           border-radius: 50%;
-          background: radial-gradient(circle, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 62%, transparent 72%);
-          box-shadow: 0 26px 70px rgba(0,0,0,0.18);
+          background: radial-gradient(circle, rgba(20, 90, 36, 0.08) 0%, rgba(20, 90, 36, 0.03) 62%, transparent 72%);
+          box-shadow: 0 24px 65px rgba(20, 90, 36, 0.1);
         }
 
         .bonicam-company-logo {
@@ -375,37 +371,7 @@ const BonicamHomeSection = ({ setCurrentPage }) => {
           width: min(78%, 300px);
           max-height: 235px;
           object-fit: contain;
-          filter: drop-shadow(0 18px 34px rgba(0,0,0,0.32));
-        }
-
-        .bonicam-yield-badge {
-          position: absolute;
-          right: 1.25rem;
-          bottom: 1.25rem;
-          width: min(260px, calc(100% - 2.5rem));
-          padding: 1rem 1.15rem;
-          border: 1px solid rgba(255,255,255,0.16);
-          border-radius: 18px;
-          background: rgba(255,255,255,0.1);
-          backdrop-filter: blur(16px);
-          color: #fff;
-        }
-
-        .bonicam-yield-badge strong,
-        .bonicam-yield-badge span {
-          display: block;
-        }
-
-        .bonicam-yield-badge strong {
-          font-size: 1.25rem;
-          font-weight: 950;
-        }
-
-        .bonicam-yield-badge span {
-          color: rgba(236, 253, 245, 0.82);
-          font-size: 0.88rem;
-          font-weight: 800;
-          margin-top: 0.25rem;
+          filter: drop-shadow(0 16px 30px rgba(20, 90, 36, 0.18));
         }
 
         .bonicam-benefits-grid {
