@@ -38,7 +38,7 @@ export const DEFAULT_SITE_SETTINGS = {
   support_whatsapp: '',
   admin_whatsapp: '',
 
-  booking_price_per_qirat: '120',
+  booking_price_per_tray: '120',
   booking_trays_per_qirat: '6',
   booking_notes: 'الشحن مجاني، وسيتم التواصل معك لتأكيد موعد التجهيز والتسليم.',
   booking_gallery_images: '[]',

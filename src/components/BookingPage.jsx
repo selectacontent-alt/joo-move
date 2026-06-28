@@ -9,7 +9,7 @@ const QIRAT_PER_FEDDAN = 22;
 
 const BookingPage = ({ setCurrentPage }) => {
   const { language, t } = useLanguage();
-  const [config, setConfig] = useState({ pricePerQirat: 120, traysPerQirat: 6, galleryImages: [], notes: '', seoImages: {} });
+  const [config, setConfig] = useState({ pricePerTray: 120, traysPerQirat: 6, galleryImages: [], notes: '', seoImages: {} });
   const [unitType, setUnitType] = useState('qirat');
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState('');
@@ -75,7 +75,7 @@ const BookingPage = ({ setCurrentPage }) => {
   const numericQuantity = Number(quantity) || 0;
   const totalQirat = Math.ceil(unitType === 'feddan' ? numericQuantity * QIRAT_PER_FEDDAN : numericQuantity);
   const totalTrays = Math.ceil(totalQirat * config.traysPerQirat);
-  const totalPrice = totalQirat * config.pricePerQirat;
+  const totalPrice = totalTrays * config.pricePerTray;
   const totalFeddan = unitType === 'feddan' ? numericQuantity : (numericQuantity / QIRAT_PER_FEDDAN);
 
   const renderSeoThumb = (key) => {
@@ -470,7 +470,7 @@ const BookingPage = ({ setCurrentPage }) => {
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                   <span>{t('booking.qirat')}</span>
-                  <small>{config.pricePerQirat} {t('booking.currency')} / {t('booking.qirat')}</small>
+                  <small>{config.pricePerTray} {t('booking.currency')} / {t('booking.tray')}</small>
                 </button>
                 <button
                   type="button"
@@ -479,7 +479,7 @@ const BookingPage = ({ setCurrentPage }) => {
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
                   <span>{t('booking.feddan')}</span>
-                  <small>{(QIRAT_PER_FEDDAN * config.pricePerQirat).toLocaleString()} {t('booking.currency')} / {t('booking.feddan')}</small>
+                  <small>{(QIRAT_PER_FEDDAN * config.traysPerQirat * config.pricePerTray).toLocaleString()} {t('booking.currency')} / {t('booking.feddan')}</small>
                 </button>
               </div>
             </div>
@@ -720,8 +720,8 @@ const BookingPage = ({ setCurrentPage }) => {
                 <span>{quantity} {t(unitType === 'feddan' ? 'booking.feddan' : 'booking.qirat')}</span>
               </div>
               <div className="booking-summary-line">
-                <span>{t('booking.qiratPrice')}</span>
-                <span>{config.pricePerQirat} {t('booking.currency')}</span>
+                <span>{t('booking.trayPrice')}</span>
+                <span>{config.pricePerTray} {t('booking.currency')}</span>
               </div>
               
               <div className="booking-summary-divider" />

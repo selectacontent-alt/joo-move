@@ -33,7 +33,7 @@ export const DEFAULT_BOOKING_CONFIRMATION_TEMPLATE = [
   '• الكمية المطلوبة: {quantity} {unit}',
   '• إجمالي القراريط: {total_qirat} قيراط',
   '• إجمالي الصواني: {total_trays} صينية',
-  '• سعر القيراط: {price_per_qirat} ج.م',
+  '• سعر الصينية: {price_per_tray} ج.م',
   '',
   '💰 *إجمالي الطلب: {total} ج.م*',
   '🚚 الشحن: *مجاني*',

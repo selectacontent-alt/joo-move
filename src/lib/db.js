@@ -348,6 +348,15 @@ export async function getPool() {
     }
     await pool.query(
       `UPDATE settings
+       SET setting_value = REPLACE(
+         REPLACE(setting_value, 'سعر القيراط', 'سعر الصينية'),
+         '{price_per_qirat}',
+         '{price_per_tray}'
+       )
+       WHERE setting_key = 'wa_template_booking_order'`
+    );
+    await pool.query(
+      `UPDATE settings
        SET setting_value = ?
        WHERE setting_key = 'hero_title'
          AND (setting_value IS NULL OR setting_value = '' OR setting_value LIKE '%أناقة طفلك%')`,

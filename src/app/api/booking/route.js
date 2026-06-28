@@ -25,7 +25,7 @@ const buildCustomerServiceBookingMessage = ({
   quantity,
   totalQirat,
   totalTrays,
-  pricePerQirat,
+  pricePerTray,
   totalPrice,
   dateTime
 }) => [
@@ -48,7 +48,7 @@ const buildCustomerServiceBookingMessage = ({
   `الكمية المطلوبة: ${formatArabicNumber(quantity)} ${unitLabel}`,
   `إجمالي القراريط: ${formatArabicNumber(totalQirat)} قيراط`,
   `إجمالي الصواني: ${formatArabicNumber(totalTrays)} صينية`,
-  `سعر القيراط: ${formatArabicNumber(pricePerQirat)} ج.م`,
+  `سعر الصينية: ${formatArabicNumber(pricePerTray)} ج.م`,
   `الإجمالي: *${formatArabicNumber(totalPrice)} ج.م*`
 ].filter(Boolean).join('\n');
 
@@ -60,7 +60,7 @@ export async function GET() {
     const [settingsRows] = await pool.query(
       `SELECT setting_key, setting_value FROM settings
        WHERE setting_key IN (
-        'booking_price_per_qirat',
+        'booking_price_per_tray',
         'booking_trays_per_qirat',
         'booking_gallery_images',
         'booking_notes',
@@ -78,7 +78,7 @@ export async function GET() {
     });
 
     return NextResponse.json({
-      pricePerQirat: Number(settings.booking_price_per_qirat) || 120,
+      pricePerTray: Number(settings.booking_price_per_tray) || 120,
       traysPerQirat: Number(settings.booking_trays_per_qirat) || 6,
       qiratPerFeddan: 22,
       galleryImages: (() => {
@@ -112,12 +112,12 @@ export async function POST(request) {
     
     // Fetch current pricing
     const [settingsRows] = await pool.query(
-      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('booking_price_per_qirat', 'booking_trays_per_qirat', 'wa_template_booking_order', 'admin_whatsapp')"
+      "SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('booking_price_per_tray', 'booking_trays_per_qirat', 'wa_template_booking_order', 'admin_whatsapp')"
     );
     const cfg = {};
     settingsRows.forEach(row => { cfg[row.setting_key] = row.setting_value; });
     
-    const pricePerQirat = Number(cfg.booking_price_per_qirat) || 120;
+    const pricePerTray = Number(cfg.booking_price_per_tray) || 120;
     const traysPerQirat = Number(cfg.booking_trays_per_qirat) || 6;
     const qiratPerFeddan = 22;
     
@@ -125,7 +125,7 @@ export async function POST(request) {
     const numericQuantity = Number(quantity) || 0;
     const totalQirat = Math.ceil(unit_type === 'feddan' ? numericQuantity * qiratPerFeddan : numericQuantity);
     const totalTrays = Math.ceil(totalQirat * traysPerQirat);
-    const totalPrice = totalQirat * pricePerQirat;
+    const totalPrice = totalTrays * pricePerTray;
     
     // Generate unique order number
     let orderNumber;
@@ -156,7 +156,7 @@ export async function POST(request) {
       quantity,
       totalQirat,
       totalTrays,
-      pricePerQirat,
+      pricePerTray,
       traysPerQirat
     });
 
@@ -180,7 +180,7 @@ export async function POST(request) {
       quantity: Number(quantity).toLocaleString('ar-EG'),
       total_qirat: Number(totalQirat).toLocaleString('ar-EG'),
       total_trays: Number(totalTrays).toLocaleString('ar-EG'),
-      price_per_qirat: Number(pricePerQirat).toLocaleString('ar-EG'),
+      price_per_tray: Number(pricePerTray).toLocaleString('ar-EG'),
       total: Number(totalPrice).toLocaleString('ar-EG'),
       phone: customer_phone,
       address: `${governorate} - ${customer_address} - ${notes}`,
@@ -207,7 +207,7 @@ export async function POST(request) {
             quantity,
             totalQirat,
             totalTrays,
-            pricePerQirat,
+            pricePerTray,
             totalPrice,
             dateTime
           });

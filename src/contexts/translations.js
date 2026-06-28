@@ -2916,7 +2916,7 @@
     "confirm": { "ar": "تأكيد الطلب — {total} {currency}", "en": "Confirm Order — {total} {currency}" },
     "summary": { "ar": "ملخص الطلب", "en": "Order Summary" },
     "unit": { "ar": "الوحدة", "en": "Unit" },
-    "qiratPrice": { "ar": "سعر القيراط", "en": "Price per qirat" },
+    "trayPrice": { "ar": "سعر الصينية", "en": "Price per tray" },
     "feddanCount": { "ar": "عدد الأفدنة", "en": "Number of feddans" },
     "shipping": { "ar": "الشحن", "en": "Shipping" },
     "free": { "ar": "مجاني", "en": "Free" },

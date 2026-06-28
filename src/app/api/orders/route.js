@@ -89,6 +89,10 @@ function buildOrderConfirmationMessage({ orderNumber, customerName, customerPhon
 
   let totalQirat = Number(bookingPayload?.totalQirat) || 0;
   let totalTrays = Number(bookingPayload?.totalTrays) || 0;
+  const bookingPricePerTray = bookingPayload?.pricePerTray
+    || (bookingPayload?.pricePerQirat && bookingPayload?.traysPerQirat
+      ? Number(bookingPayload.pricePerQirat) / Number(bookingPayload.traysPerQirat)
+      : '');
 
   const productsLines = bookingPayload
     ? [
@@ -126,7 +130,7 @@ function buildOrderConfirmationMessage({ orderNumber, customerName, customerPhon
     quantity: bookingPayload ? formatArabicNumber(bookingPayload.quantity) : '',
     total_qirat: formatArabicNumber(totalQirat),
     total_trays: formatArabicNumber(totalTrays),
-    price_per_qirat: bookingPayload?.pricePerQirat ? formatArabicNumber(bookingPayload.pricePerQirat) : '',
+    price_per_tray: bookingPricePerTray ? formatArabicNumber(bookingPricePerTray) : '',
     notes_line: '',
     subtotal: formatMoney(subtotal),
     shipping: formatMoney(shipping),
@@ -138,6 +142,10 @@ function buildOrderConfirmationMessage({ orderNumber, customerName, customerPhon
 function buildCustomerServiceBookingMessage({ orderNumber, customerName, customerPhone, total, bookingPayload }) {
   const { fullName, phonePart, governorate, address } = splitCustomerInfo(customerName);
   const unitLabel = bookingPayload.unit_type === 'feddan' ? 'فدان' : 'قيراط';
+  const pricePerTray = bookingPayload.pricePerTray
+    || (bookingPayload.pricePerQirat && bookingPayload.traysPerQirat
+      ? Number(bookingPayload.pricePerQirat) / Number(bookingPayload.traysPerQirat)
+      : '');
   const dateTime = new Date().toLocaleString('ar-EG', {
     dateStyle: 'short',
     timeStyle: 'medium',
@@ -162,7 +170,7 @@ function buildCustomerServiceBookingMessage({ orderNumber, customerName, custome
     `الكمية المطلوبة: ${formatArabicNumber(bookingPayload.quantity)} ${unitLabel}`,
     `إجمالي القراريط: ${formatArabicNumber(bookingPayload.totalQirat)} قيراط`,
     `إجمالي الصواني: ${formatArabicNumber(bookingPayload.totalTrays)} صينية`,
-    bookingPayload.pricePerQirat ? `سعر القيراط: ${formatArabicNumber(bookingPayload.pricePerQirat)} ج.م` : '',
+    pricePerTray ? `سعر الصينية: ${formatArabicNumber(pricePerTray)} ج.م` : '',
     `الإجمالي: *${formatArabicNumber(total)} ج.م*`
   ].filter(Boolean).join('\n');
 }

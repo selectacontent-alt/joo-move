@@ -3024,12 +3024,12 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '2rem' }}>
                   <div className="form-group">
-                    <label style={{ fontWeight: '800', marginBottom: '0.5rem', display: 'block' }}>سعر القيراط الواحد (ج.م)</label>
+                    <label style={{ fontWeight: '800', marginBottom: '0.5rem', display: 'block' }}>سعر الصينية الواحدة (ج.م)</label>
                     <input
                       type="number"
                       className="admin-input"
-                      value={settings.booking_price_per_qirat || ''}
-                      onChange={(e) => setSettings({ ...settings, booking_price_per_qirat: e.target.value })}
+                      value={settings.booking_price_per_tray || ''}
+                      onChange={(e) => setSettings({ ...settings, booking_price_per_tray: e.target.value })}
                       placeholder="مثال: 120"
                       required
                     />
