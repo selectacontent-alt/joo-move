@@ -7,6 +7,8 @@ const addCandidate = (candidates, dir) => {
   if (!candidates.includes(resolved)) candidates.push(resolved);
 };
 
+// /data must be mounted as a persistent host/volume path in production.
+// New uploads are written only to this external location, never mirrored into the app image.
 const defaultPersistentUploadDir = '/data/uploads';
 
 export function getUploadDirCandidates() {
@@ -78,23 +80,6 @@ export async function writeUploadedFile(filename, buffer) {
 
   await fs.promises.mkdir(primaryDir, { recursive: true });
   await fs.promises.writeFile(primaryPath, buffer);
-
-  const mirrors = getUploadDirCandidates()
-    .filter((dir) => dir !== primaryDir)
-    .filter((dir) => {
-      try {
-        return fs.existsSync(dir) && fs.statSync(dir).isDirectory();
-      } catch {
-        return false;
-      }
-    });
-
-  await Promise.allSettled(
-    mirrors.map(async (dir) => {
-      const mirrorPath = path.join(dir, filename);
-      await fs.promises.writeFile(mirrorPath, buffer);
-    })
-  );
 
   return primaryPath;
 }

@@ -1,9 +1,80 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { getAdminSession } from '@/lib/adminSession';
+import * as whatsappService from '@/lib/whatsappService';
+import { repairArabicMojibake } from '@/lib/textEncoding';
+import {
+  applyWhatsAppTemplate,
+  buildMoveRequestTemplateValues,
+  DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE
+} from '@/lib/whatsappTemplates';
 
 const cleanPhone = (value) => String(value || '').replace(/\D/g, '');
 const parseJson = (value, fallback = []) => { try { return typeof value === 'string' ? JSON.parse(value) : (value ?? fallback); } catch { return fallback; } };
+
+const getPublicOrigin = (request) => {
+  const configured = String(process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || '').replace(/\/$/, '');
+  if (configured) return configured;
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  if (forwardedHost) return `${forwardedProto || 'https'}://${forwardedHost}`;
+  return new URL(request.url).origin;
+};
+
+const toAbsoluteMediaUrl = (origin, value) => {
+  const url = String(value || '').trim();
+  if (!url) return '';
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${origin}${url.startsWith('/') ? '' : '/'}${url}`;
+};
+
+async function getArabicServiceNames(pool, slugs) {
+  if (!slugs.length) return {};
+  const placeholders = slugs.map(() => '?').join(',');
+  const [rows] = await pool.query(
+    `SELECT s.slug, COALESCE(ar.title, s.slug) AS title
+     FROM services s
+     LEFT JOIN service_translations ar ON ar.service_id = s.id AND ar.language = 'ar'
+     WHERE s.slug IN (${placeholders})`,
+    slugs
+  );
+  return Object.fromEntries(rows.map((row) => [row.slug, row.title]));
+}
+
+async function queueNewRequestNotifications(pool, request, savedRequest, services, media) {
+  const keys = ['admin_whatsapp', 'wa_template_move_request_customer', 'wa_template_move_request_admin'];
+  const [settingRows] = await pool.query(
+    `SELECT setting_key, setting_value FROM settings WHERE setting_key IN (${keys.map(() => '?').join(',')})`,
+    keys
+  );
+  const settings = Object.fromEntries(settingRows.map((row) => [row.setting_key, repairArabicMojibake(row.setting_value)]));
+  const origin = getPublicOrigin(request);
+  const mediaUrls = media.map((item) => toAbsoluteMediaUrl(origin, item.url)).filter(Boolean);
+  const serviceNames = await getArabicServiceNames(pool, services);
+  const values = buildMoveRequestTemplateValues(savedRequest, { serviceNames, mediaUrls });
+  const customerTemplate = settings.wa_template_move_request_customer || DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE;
+  const adminTemplate = settings.wa_template_move_request_admin || DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE;
+  const customerNumber = cleanPhone(savedRequest.whatsapp || savedRequest.phone);
+  const adminNumber = cleanPhone(settings.admin_whatsapp);
+
+  if (customerNumber) {
+    await whatsappService.queueMessage(
+      customerNumber,
+      applyWhatsAppTemplate(customerTemplate, values),
+      null,
+      { dedupeKey: `move-request-customer-${savedRequest.id}` }
+    );
+  }
+  if (adminNumber) {
+    await whatsappService.queueMessage(
+      adminNumber,
+      applyWhatsAppTemplate(adminTemplate, values),
+      null,
+      { dedupeKey: `move-request-admin-${savedRequest.id}` }
+    );
+  }
+}
 
 const shapeRequest = (row) => ({
   ...row,
@@ -77,12 +148,19 @@ export async function POST(request) {
       'INSERT INTO request_status_history (move_request_id, status, note, changed_by) VALUES (?, ?, ?, ?)',
       [result.insertId, 'received', 'تم إنشاء الطلب من الموقع', 'website']
     );
-    for (const media of Array.isArray(data.media) ? data.media.slice(0, 10) : []) {
-      if (!media?.url) continue;
+    const media = Array.isArray(data.media) ? data.media.slice(0, 10) : [];
+    for (const item of media) {
+      if (!item?.url) continue;
       await pool.query(
         'INSERT INTO move_request_media (move_request_id, media_url, media_type) VALUES (?, ?, ?)',
-        [result.insertId, media.url, media.type === 'video' ? 'video' : 'image']
+        [result.insertId, item.url, item.type === 'video' ? 'video' : 'image']
       );
+    }
+    const [[savedRequest]] = await pool.query('SELECT * FROM move_requests WHERE id = ? LIMIT 1', [result.insertId]);
+    try {
+      await queueNewRequestNotifications(pool, request, savedRequest, services, media);
+    } catch (notificationError) {
+      console.error('[MoveRequest] WhatsApp notification queue failed:', notificationError);
     }
     return NextResponse.json({ requestNumber, status: 'received', createdAt: new Date().toISOString() }, { status: 201 });
   } catch (error) {

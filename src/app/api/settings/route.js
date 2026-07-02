@@ -4,6 +4,11 @@ import { getPool } from '@/lib/db';
 import { repairArabicMojibake } from '@/lib/textEncoding';
 import {
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+  DEFAULT_FURNITURE_DELIVERED_TEMPLATE,
+  DEFAULT_FURNITURE_SHIPPED_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
+  DEFAULT_MOVE_STATUS_TEMPLATES,
   DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
   LEGACY_ORDER_CONFIRMATION_TEMPLATE
 } from '@/lib/whatsappTemplates';
@@ -22,6 +27,13 @@ export async function GET() {
     }
     if (!settings.wa_template_booking_order) {
       settings.wa_template_booking_order = DEFAULT_BOOKING_CONFIRMATION_TEMPLATE;
+    }
+    settings.wa_template_shipped ||= DEFAULT_FURNITURE_SHIPPED_TEMPLATE;
+    settings.wa_template_delivered ||= DEFAULT_FURNITURE_DELIVERED_TEMPLATE;
+    settings.wa_template_move_request_customer ||= DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE;
+    settings.wa_template_move_request_admin ||= DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE;
+    for (const [status, template] of Object.entries(DEFAULT_MOVE_STATUS_TEMPLATES)) {
+      settings[`wa_template_move_status_${status}`] ||= template;
     }
     return NextResponse.json(settings);
   } catch (err) {

@@ -2,6 +2,11 @@ import mysql from 'mysql2/promise';
 import { hashPassword } from './auth';
 import {
   DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+  DEFAULT_FURNITURE_DELIVERED_TEMPLATE,
+  DEFAULT_FURNITURE_SHIPPED_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
+  DEFAULT_MOVE_STATUS_TEMPLATES,
   DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
   LEGACY_ORDER_CONFIRMATION_TEMPLATE
 } from './whatsappTemplates';
@@ -584,17 +589,34 @@ export async function getPool() {
     } else {
       console.warn('ADMIN_USERNAME and ADMIN_PASSWORD are not set; skipping default admin seed.');
     }
+    const moveStatusTemplates = Object.fromEntries(
+      Object.entries(DEFAULT_MOVE_STATUS_TEMPLATES).map(([status, template]) => [
+        `wa_template_move_status_${status}`,
+        template
+      ])
+    );
     const defaultTemplates = {
       'wa_template_new_order': DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
       'wa_template_booking_order': DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
-      'wa_template_shipped': 'مرحباً، طلبك رقم {order_id} تم شحنه وهو في طريقه إليك!',
-      'wa_template_delivered': 'مرحباً، نأمل أن يكون طلبك رقم {order_id} قد نال إعجابك. شكراً لتسوقك معنا!'
+      'wa_template_shipped': DEFAULT_FURNITURE_SHIPPED_TEMPLATE,
+      'wa_template_delivered': DEFAULT_FURNITURE_DELIVERED_TEMPLATE,
+      'wa_template_move_request_customer': DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
+      'wa_template_move_request_admin': DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE,
+      ...moveStatusTemplates
     };
 
     for (const [key, val] of Object.entries({ ...DEFAULT_SITE_SETTINGS, ...defaultTemplates })) {
       await pool.query('INSERT IGNORE INTO settings (setting_key, setting_value) VALUES (?, ?)', [key, val]);
     }
     await pool.query("UPDATE settings SET setting_value = 'Joo Move' WHERE setting_key = 'store_name'");
+    for (const [key, value] of Object.entries({
+      wa_template_new_order: DEFAULT_ORDER_CONFIRMATION_TEMPLATE,
+      wa_template_booking_order: DEFAULT_BOOKING_CONFIRMATION_TEMPLATE,
+      wa_template_shipped: DEFAULT_FURNITURE_SHIPPED_TEMPLATE,
+      wa_template_delivered: DEFAULT_FURNITURE_DELIVERED_TEMPLATE
+    })) {
+      await pool.query('UPDATE settings SET setting_value = ? WHERE setting_key = ?', [value, key]);
+    }
     await pool.query(
       `UPDATE settings
        SET setting_value = REPLACE(

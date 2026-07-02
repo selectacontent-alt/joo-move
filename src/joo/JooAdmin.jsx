@@ -6,9 +6,14 @@ import {
   FileText, GalleryHorizontal, Globe2, GripVertical, Headphones, ImagePlus, LayoutGrid,
   LogOut, MapPin, Menu, MessageCircle, PackageCheck, Pencil, Phone, Plus, RefreshCw,
   Save, Search, Settings, ShieldCheck, Star, Trash2, Truck, UploadCloud, UserRound,
-  UsersRound, Wrench, X
+  UsersRound, Wrench, X, Lock
 } from 'lucide-react';
 import { DEFAULT_PAGE_CONTENT, MOVE_STATUSES } from './defaultContent';
+import {
+  DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE,
+  DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
+  DEFAULT_MOVE_STATUS_TEMPLATES
+} from '../lib/whatsappTemplates';
 
 const STATUS_COLOR = {
   received: '#0087b4', contacting: '#7c3aed', inspection_scheduled: '#b7791f', quote_sent: '#c2410c',
@@ -25,7 +30,7 @@ function AdminLogin({ onLogin }) {
     try { const response = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) }); const result = await response.json(); if (!response.ok || !result.success) throw new Error(result.error || 'بيانات الدخول غير صحيحة'); localStorage.setItem('joo_admin_auth', JSON.stringify(result.user)); onLogin(result.user); }
     catch (err) { setError(err.message); } finally { setLoading(false); }
   };
-  return <main className="jma-login"><section><div className="jma-login-brand"><img src="/joo-logo-white.png" alt="Joo Move" /><span>CONTROL CENTER</span><h1>إدارة النقلات والمحتوى من مكان واحد</h1><p>تابع الطلبات، نظّم جدول التشغيل وعدّل كل محتوى الموقع بدون المساس بالتصميم.</p><div><span><ShieldCheck />جلسة إدارة آمنة</span><span><CircleGauge />تشغيل لحظي</span></div></div><form onSubmit={submit}><img src="/joo-logo.png" alt="Joo Move" /><h2>تسجيل الدخول</h2><p>استخدم حساب الإدارة للوصول إلى لوحة Joo Move.</p><label><span>اسم المستخدم</span><input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label><span>كلمة المرور</span><input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label>{error && <div className="jma-error">{error}</div>}<button disabled={loading}>{loading ? 'جارٍ الدخول...' : 'دخول لوحة التحكم'}</button></form></section></main>;
+  return <main className="jma-login-sc"><div className="jma-login-glow-1" /><div className="jma-login-glow-2" /><section className="jma-login-card animate-up"><div className="jma-login-logo"><img src="/s-logo.png" alt="Joo Move" /><h2>تسجيل الدخول</h2><p>أدخل بيانات الاعتماد الخاصة بك للوصول</p></div><form onSubmit={submit}>{error && <div className="jma-error-glass"><ShieldCheck size={20} />{error}</div>}<div className="jma-input-glass"><UserRound size={22} /><input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} placeholder="اسم المستخدم" /></div><div className="jma-input-glass"><Lock size={22} /><input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder="كلمة المرور" /></div><button disabled={loading} className="jma-submit-glass">{loading ? 'جارٍ تسجيل الدخول...' : 'تسجيل الدخول'}</button></form></section></main>;
 }
 
 const TABS = [
@@ -124,8 +129,32 @@ function SettingsAdmin({ settings, reload }) {
 
 function WhatsAppAdmin({ settings, reload }) {
   const [status, setStatus] = useState(null); const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({}); const [saving, setSaving] = useState(false);
   useEffect(() => { fetch('/api/whatsapp/status').then((r) => r.json()).then(setStatus).catch(() => setStatus({ ready: false })).finally(() => setLoading(false)); }, []);
-  return <div className="jma-stack"><div className="jma-page-title"><div><span>WHATSAPP OPERATIONS</span><h2>واتساب والقوالب</h2><p>حالة الاتصال وأرقام الاستقبال. القوالب قابلة للتوسعة حسب كل حالة.</p></div></div><div className="jma-grid-2"><section className="jma-panel jma-wa-status"><span className={status?.ready ? 'ready' : ''}><Phone /></span><h3>{loading ? 'جارٍ فحص الاتصال...' : status?.ready ? 'واتساب متصل وجاهز' : 'واتساب غير متصل'}</h3><p>{status?.ready ? 'يمكن إرسال إشعارات الطلبات والحالات.' : 'استخدم شاشة الربط الحالية أو أعد تشغيل الخدمة عند الحاجة.'}</p><button className="jma-btn primary" onClick={async () => { await fetch('/api/whatsapp/restart', { method: 'POST' }); location.reload(); }}><RefreshCw />إعادة تشغيل الاتصال</button></section><section className="jma-panel"><h3>بيانات الإرسال</h3><div className="jma-info-list"><div><span>رقم خدمة العملاء</span><bdi>{settings.support_whatsapp || 'غير محدد'}</bdi></div><div><span>رقم الإدارة</span><bdi>{settings.admin_whatsapp || 'غير محدد'}</bdi></div><div><span>إشعار الطلب الجديد</span><b>فعال عند توفر الاتصال</b></div></div></section></div><section className="jma-panel"><div className="jma-panel-head"><div><h3>قوالب رحلة العميل</h3><p>الهيكل المعتمد للإشعارات.</p></div></div><div className="jma-template-grid">{MOVE_STATUSES.slice(0, 9).map((item) => <article key={item.value}><span style={{ background: STATUS_COLOR[item.value] }} /><b>{item.ar}</b><small>{item.value}</small></article>)}</div></section></div>;
+  useEffect(() => {
+    const next = {
+      wa_template_move_request_customer: settings.wa_template_move_request_customer || DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
+      wa_template_move_request_admin: settings.wa_template_move_request_admin || DEFAULT_MOVE_REQUEST_ADMIN_TEMPLATE
+    };
+    for (const item of MOVE_STATUSES) {
+      next[`wa_template_move_status_${item.value}`] = settings[`wa_template_move_status_${item.value}`] || DEFAULT_MOVE_STATUS_TEMPLATES[item.value] || '';
+    }
+    setForm(next);
+  }, [settings]);
+  const saveTemplates = async () => {
+    setSaving(true);
+    try {
+      const response = await fetch('/api/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      if (!response.ok) throw new Error();
+      await reload();
+      alert('تم حفظ رسائل واتساب');
+    } catch {
+      alert('تعذر حفظ رسائل واتساب');
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <div className="jma-stack"><div className="jma-page-title"><div><span>WHATSAPP OPERATIONS</span><h2>واتساب ورسائل نقل الأثاث</h2><p>رسالة كاملة من بيانات الطلب، ثم رسالة مناسبة لكل مرحلة من رحلة النقل.</p></div><button className="jma-btn primary" onClick={saveTemplates} disabled={saving}><Save />{saving ? 'جارٍ الحفظ...' : 'حفظ كل الرسائل'}</button></div><div className="jma-grid-2"><section className="jma-panel jma-wa-status"><span className={status?.ready ? 'ready' : ''}><Phone /></span><h3>{loading ? 'جارٍ فحص الاتصال...' : status?.ready ? 'واتساب متصل وجاهز' : 'واتساب غير متصل'}</h3><p>{status?.ready ? 'طلبات نقل الأثاث وتحديثات الحالات ستُرسل من قائمة الانتظار.' : 'الرسائل تُحفظ في قائمة الانتظار حتى يتم ربط واتساب من جديد.'}</p><button className="jma-btn primary" onClick={async () => { await fetch('/api/whatsapp/restart', { method: 'POST' }); location.reload(); }}><RefreshCw />إعادة تشغيل الاتصال</button></section><section className="jma-panel"><h3>بيانات الإرسال</h3><div className="jma-info-list"><div><span>رقم خدمة العملاء</span><bdi>{settings.support_whatsapp || 'غير محدد'}</bdi></div><div><span>رقم الإدارة</span><bdi>{settings.admin_whatsapp || 'غير محدد'}</bdi></div><div><span>رسالة العميل الجديدة</span><b>تشمل بيانات النموذج كاملة</b></div><div><span>رسالة الإدارة</span><b>تشمل روابط الصور والفيديو</b></div></div></section></div><section className="jma-panel"><div className="jma-panel-head"><div><h3>رسالة الطلب الجديد</h3><p>يمكن استخدام حقول مثل {'{request_number}'} و{'{customer_name}'} و{'{services}'} و{'{media_links}'}.</p></div></div><div className="jma-form-grid"><label className="wide"><span>الرسالة التي تصل للعميل</span><textarea rows="18" value={form.wa_template_move_request_customer || ''} onChange={(e) => setForm({ ...form, wa_template_move_request_customer: e.target.value })} /></label><label className="wide"><span>الرسالة التي تصل للإدارة</span><textarea rows="18" value={form.wa_template_move_request_admin || ''} onChange={(e) => setForm({ ...form, wa_template_move_request_admin: e.target.value })} /></label></div></section><section className="jma-panel"><div className="jma-panel-head"><div><h3>رسائل مراحل نقل الأثاث</h3><p>تُرسل تلقائيًا للعميل عند تغيير حالة الطلب من لوحة الإدارة.</p></div></div><div className="jma-form-grid">{MOVE_STATUSES.map((item) => { const key = `wa_template_move_status_${item.value}`; return <label key={item.value}><span><i style={{ background: STATUS_COLOR[item.value] }} />{item.ar}</span><textarea value={form[key] || ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>; })}</div></section></div>;
 }
 
 export default function JooAdmin({ navigate }) {
@@ -157,5 +186,5 @@ export default function JooAdmin({ navigate }) {
     if (active === 'settings') return <SettingsAdmin settings={data.settings} reload={load} />;
     return null;
   };
-  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/joo-logo-white.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>Joo Move Admin</small></div></div><nav>{TABS.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{TABS.find(([id]) => id === active)?.[2]}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button><button className="jma-notify"><Bell /><em>{data.requests.filter((r) => r.status === 'received').length}</em></button><span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
+  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/s-logo.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>Joo Move Admin</small></div></div><nav>{TABS.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{TABS.find(([id]) => id === active)?.[2]}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button><button className="jma-notify"><Bell /><em>{data.requests.filter((r) => r.status === 'received').length}</em></button><span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
 }

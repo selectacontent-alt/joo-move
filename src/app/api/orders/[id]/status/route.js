@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import * as whatsappService from '@/lib/whatsappService';
+import {
+    DEFAULT_FURNITURE_DELIVERED_TEMPLATE,
+    DEFAULT_FURNITURE_SHIPPED_TEMPLATE
+} from '@/lib/whatsappTemplates';
 
 export async function PUT(request, { params }) {
   try {
@@ -27,8 +31,8 @@ export async function PUT(request, { params }) {
         
         if (waStatus.status !== 'DISABLED') {
             const [settingsRows] = await pool.query("SELECT setting_key, setting_value FROM settings WHERE setting_key IN ('wa_template_shipped', 'wa_template_delivered')");
-            let shippedTemplate = 'مرحباً، طلبك رقم {order_id} تم شحنه وهو في طريقه إليك!';
-            let deliveredTemplate = 'مرحباً، نأمل أن يكون طلبك رقم {order_id} قد نال إعجابك. شكراً لتسوقك معنا!';
+            let shippedTemplate = DEFAULT_FURNITURE_SHIPPED_TEMPLATE;
+            let deliveredTemplate = DEFAULT_FURNITURE_DELIVERED_TEMPLATE;
             
             settingsRows.forEach(row => {
                 if (row.setting_key === 'wa_template_shipped') shippedTemplate = row.setting_value;
