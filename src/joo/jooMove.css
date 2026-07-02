@@ -36,7 +36,7 @@ html[lang='en'] .jm-app, html[lang='en'] .jm-app button, html[lang='en'] .jm-app
 .jm-nav { height: 100%; display: flex; align-items: center; gap: 34px; direction: ltr; }
 .jm-logo-button { border: 0; background: transparent; padding: 0; display: grid; place-items: center; flex: 0 0 auto; }
 .jm-logo { width: 150px; height: 58px; object-fit: contain; transition: filter .2s; }
-.jm-logo-inverse { filter: brightness(0) invert(1); }
+.jm-logo-inverse { filter: drop-shadow(0 2px 8px rgba(0,0,0,.3)); }
 .jm-nav-links { flex: 1; display: flex; justify-content: center; align-items: center; gap: 26px; }
 html[dir="rtl"] .jm-nav-links { direction: rtl; }
 .jm-nav-links button { position: relative; background: none; border: 0; color: inherit; padding: 10px 0; font-size: 13px; font-weight: 600; opacity: .82; }

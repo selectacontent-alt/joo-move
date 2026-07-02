@@ -139,7 +139,7 @@ function FloatingWhatsApp({ settings, footerInView }) {
 }
 
 const Logo = ({ inverse = false }) => (
-  <img className={`jm-logo ${inverse ? 'jm-logo-inverse' : ''}`} src={inverse ? '/joo-logo-white.png' : '/joo-logo.png'} alt="Joo Move" />
+  <img className={`jm-logo ${inverse ? 'jm-logo-inverse' : ''}`} src="/joo-logo.png" alt="Joo Move" />
 );
 
 function Header({ path, navigate, settings }) {
