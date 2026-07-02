@@ -12,6 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@wppconnect/wa-js": "^4.3.1",
     "bcryptjs": "^3.0.3",
     "googleapis": "^173.0.0",
     "lucide-react": "^0.468.0",

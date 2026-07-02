@@ -19,4 +19,11 @@ const copyDir = (from, to) => {
 copyDir(path.join(root, 'public'), path.join(standaloneDir, 'public'));
 copyDir(path.join(root, '.next', 'static'), path.join(standaloneDir, '.next', 'static'));
 
-console.log('[standalone] Copied public and static assets into .next/standalone.');
+const waJsBundle = path.join(root, 'node_modules', '@wppconnect', 'wa-js', 'dist', 'wppconnect-wa.js');
+if (fs.existsSync(waJsBundle)) {
+  const waJsTarget = path.join(standaloneDir, '.wajs', 'wppconnect-wa.js');
+  fs.mkdirSync(path.dirname(waJsTarget), { recursive: true });
+  fs.copyFileSync(waJsBundle, waJsTarget);
+}
+
+console.log('[standalone] Copied public, static assets and the WhatsApp delivery engine into .next/standalone.');

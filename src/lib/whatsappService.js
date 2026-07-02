@@ -18,6 +18,7 @@ const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS',
 const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
 const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 10000);
 const MESSAGE_ACK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_MESSAGE_ACK_TIMEOUT_MS', 15000);
+const WAJS_INJECT_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_WAJS_INJECT_TIMEOUT_MS', 60000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
 const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
@@ -25,6 +26,7 @@ const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
 const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND !== 'false';
+const USE_WAJS_SEND = process.env.WHATSAPP_USE_WAJS_SEND !== 'false';
 const CLOCK_EMOJI = '\u{1F552}';
 const MESSAGE_ACK_LABELS = {
   [-1]: 'error',
@@ -36,7 +38,81 @@ const MESSAGE_ACK_LABELS = {
 };
 
 function getMessageId(message) {
-  return message?.id?._serialized || message?.id?.id || 'unknown';
+  return typeof message?.id === 'string' ? message.id : (message?.id?._serialized || message?.id?.id || 'unknown');
+}
+
+function getWaJsBundlePath() {
+  const candidates = [
+    process.env.WHATSAPP_WAJS_BUNDLE_PATH,
+    path.join(process.cwd(), 'node_modules', '@wppconnect', 'wa-js', 'dist', 'wppconnect-wa.js'),
+    path.join(process.cwd(), '.wajs', 'wppconnect-wa.js')
+  ].filter(Boolean);
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+async function ensureWaJsInjected(client) {
+  if (!USE_WAJS_SEND) return false;
+  const page = client?.pupPage;
+  if (!page) throw new Error('WhatsApp browser page is unavailable for WA-JS');
+
+  const alreadyReady = await page.evaluate(() => Boolean(window.WPP?.isReady));
+  if (alreadyReady) return true;
+
+  const bundlePath = getWaJsBundlePath();
+  if (!bundlePath) throw new Error('WA-JS browser bundle was not found');
+
+  console.log('[WhatsApp] Injecting WA-JS delivery engine...');
+  await page.addScriptTag({ path: bundlePath });
+  await page.waitForFunction(() => Boolean(window.WPP?.isReady), { timeout: WAJS_INJECT_TIMEOUT_MS });
+  console.log('[WhatsApp] WA-JS delivery engine is ready.');
+  return true;
+}
+
+async function sendMessageWithWaJs(client, chatId, message, media = null) {
+  const page = client.pupPage;
+  return page.evaluate(async ({ recipient, text, attachment }) => {
+    if (!window.WPP?.isReady) throw new Error('WA-JS is not ready inside WhatsApp Web');
+
+    let result;
+    if (attachment) {
+      result = await window.WPP.chat.sendFileMessage(
+        recipient,
+        `data:${attachment.mimetype};base64,${attachment.data}`,
+        {
+          type: attachment.type,
+          caption: text,
+          filename: attachment.filename || undefined,
+          mimetype: attachment.mimetype,
+          waitForAck: true,
+          markIsRead: false
+        }
+      );
+    } else {
+      result = await window.WPP.chat.sendTextMessage(recipient, text, {
+        waitForAck: true,
+        markIsRead: false
+      });
+    }
+
+    return {
+      id: typeof result?.id === 'string' ? result.id : result?.id?._serialized,
+      ack: Number(result?.ack ?? 0),
+      from: result?.from?._serialized || result?.from,
+      to: result?.to?._serialized || result?.to || recipient
+    };
+  }, {
+    recipient: chatId,
+    text: message,
+    attachment: media ? {
+      data: media.data,
+      mimetype: media.mimetype || 'application/octet-stream',
+      filename: media.filename || null,
+      type: String(media.mimetype || '').startsWith('image/') ? 'image'
+        : String(media.mimetype || '').startsWith('video/') ? 'video'
+          : String(media.mimetype || '').startsWith('audio/') ? 'audio'
+            : 'document'
+    } : null
+  });
 }
 
 async function getPhoneChatId(client, formatted, numberId) {
@@ -135,6 +211,7 @@ state.lastInitError = state.lastInitError || null;
 state.isRequestingPairingCode = Boolean(state.isRequestingPairingCode);
 state.pairingPhoneNumber = state.pairingPhoneNumber || null;
 state.pairingCodeIssuedAt = Number(state.pairingCodeIssuedAt) || 0;
+state.waJsReady = Boolean(state.waJsReady);
 
 
 function readPositiveIntEnv(name, fallback) {
@@ -614,9 +691,15 @@ export function initializeWhatsApp(options = {}) {
     state.lastInitError = null;
   });
 
-  state.client.on('ready', () => {
+  state.client.on('ready', async () => {
     console.log('WhatsApp Client is ready!');
     clearQrState();
+    try {
+      state.waJsReady = await ensureWaJsInjected(state.client);
+    } catch (error) {
+      state.waJsReady = false;
+      console.error('[WhatsApp] WA-JS delivery engine could not be loaded; using the legacy sender:', error.message);
+    }
     state.status = 'CONNECTED';
     state.nextInitializeAt = 0;
     state.lastInitError = null;
@@ -668,6 +751,7 @@ export function initializeWhatsApp(options = {}) {
   state.client.on('disconnected', (reason) => {
     console.log('WhatsApp Client disconnected:', reason);
     state.status = 'DISCONNECTED';
+    state.waJsReady = false;
     clearQrState();
     state.isInitialized = false;
     state.client = null;
@@ -1215,9 +1299,8 @@ async function executeSendMessage(task) {
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
 
-    let sentMessage;
+    let media = null;
     if (mediaUrl) {
-      let media;
       if (mediaUrl.startsWith('http')) {
         media = await MessageMedia.fromUrl(mediaUrl);
       } else if (fs.existsSync(mediaUrl)) {
@@ -1226,10 +1309,34 @@ async function executeSendMessage(task) {
         media = await MessageMedia.fromUrl(mediaUrl);
       }
 
-      sentMessage = await state.client.sendMessage(chatId, media, { caption: task.message, waitUntilMsgSent: true });
-    } else {
-      sentMessage = await state.client.sendMessage(chatId, task.message, { waitUntilMsgSent: true });
     }
+
+    if (USE_WAJS_SEND) {
+      try {
+        state.waJsReady = await ensureWaJsInjected(state.client);
+      } catch (error) {
+        state.waJsReady = false;
+        console.error('[WhatsApp Queue] WA-JS is unavailable before sending; falling back to the legacy sender:', error.message);
+      }
+    }
+
+    if (state.waJsReady) {
+      const result = await sendMessageWithWaJs(state.client, chatId, task.message, media);
+      const messageId = getMessageId(result);
+      const ack = Number.isInteger(result?.ack) ? result.ack : 0;
+      const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
+      if (!messageId || messageId === 'unknown' || ack < 1) {
+        const error = new Error(`WA-JS did not confirm message ${messageId} to ${chatId}. ACK: ${ack} (${ackLabel})`);
+        error.isPermanent = true;
+        throw error;
+      }
+      console.log(`[WhatsApp Queue] WA-JS confirmed message ${messageId} for ${chatId}. ACK: ${ack} (${ackLabel})`);
+      return { sent: true, messageId, ack, engine: 'wa-js' };
+    }
+
+    const sentMessage = media
+      ? await state.client.sendMessage(chatId, media, { caption: task.message, waitUntilMsgSent: true, sendSeen: false })
+      : await state.client.sendMessage(chatId, task.message, { waitUntilMsgSent: true, sendSeen: false });
 
     const messageId = getMessageId(sentMessage);
     if (!sentMessage || messageId === 'unknown') {
