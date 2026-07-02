@@ -1,18 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { hashPassword } from '@/lib/auth';
+import { getAdminSession } from '@/lib/adminSession';
+import { normalizeAdminPermissions, parseAdminPermissions } from '@/lib/adminPermissions';
 
-const normalizePermissions = (permissions) => {
-  if (!Array.isArray(permissions)) return null;
-  const blockedTabs = new Set(['select_market']);
-  const seen = new Set();
-  const normalized = permissions
-    .map(item => String(item || '').trim())
-    .filter(item => item && !blockedTabs.has(item) && !seen.has(item) && seen.add(item));
-  return normalized.length ? JSON.stringify(normalized) : null;
-};
+const requireAdmin = (request) => getAdminSession(request)?.role === 'admin';
 
-export async function GET() {
+export async function GET(request) {
+  if (!requireAdmin(request)) return NextResponse.json({ error: 'غير مصرح بإدارة الحسابات' }, { status: 403 });
   try {
     const pool = await getPool();
     const [rows] = await pool.query(
@@ -22,8 +17,7 @@ export async function GET() {
       ...row,
       permissions: (() => {
         try {
-          const parsed = typeof row.permissions === 'string' ? JSON.parse(row.permissions) : row.permissions;
-          return Array.isArray(parsed) ? parsed : [];
+          return parseAdminPermissions(row.permissions);
         } catch {
           return [];
         }
@@ -35,14 +29,20 @@ export async function GET() {
 }
 
 export async function POST(request) {
+  if (!requireAdmin(request)) return NextResponse.json({ error: 'غير مصرح بإدارة الحسابات' }, { status: 403 });
   try {
     const { username, password, role, permissions } = await request.json();
+    const cleanUsername = String(username || '').trim();
+    const cleanPassword = String(password || '');
+    const cleanRole = role === 'admin' ? 'admin' : 'staff';
+    if (cleanUsername.length < 3) return NextResponse.json({ error: 'اسم المستخدم يجب ألا يقل عن 3 أحرف' }, { status: 400 });
+    if (cleanPassword.length < 6) return NextResponse.json({ error: 'كلمة المرور يجب ألا تقل عن 6 أحرف' }, { status: 400 });
     const pool = await getPool();
-    const passwordHash = await hashPassword(password);
-    const permissionsJson = normalizePermissions(permissions);
+    const passwordHash = await hashPassword(cleanPassword);
+    const permissionsJson = cleanRole === 'admin' ? null : JSON.stringify(normalizeAdminPermissions(permissions));
     await pool.query(
       'INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)',
-      [username, passwordHash, role, permissionsJson]
+      [cleanUsername, passwordHash, cleanRole, permissionsJson]
     );
     return NextResponse.json({ success: true });
   } catch (err) {

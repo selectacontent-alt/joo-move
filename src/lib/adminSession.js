@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { parseAdminPermissions } from './adminPermissions';
 
 const COOKIE_NAME = 'joo_admin_session';
 const MAX_AGE = 60 * 60 * 12;
@@ -13,6 +14,7 @@ export function createAdminSession(user) {
     id: user.id,
     username: user.username,
     role: user.role,
+    permissions: parseAdminPermissions(user.permissions),
     exp: Math.floor(Date.now() / 1000) + MAX_AGE,
   }));
   return `${payload}.${sign(payload)}`;

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  BarChart3, Bell, Boxes, CalendarDays, Check, ChevronLeft, CircleGauge, Clock3,
+  AlertCircle, BarChart3, Bell, Boxes, CalendarDays, Check, ChevronLeft, CircleGauge, Clock3,
   FileText, GalleryHorizontal, Globe2, GripVertical, Headphones, ImagePlus, LayoutGrid,
   LogOut, MapPin, Menu, MessageCircle, PackageCheck, Pencil, Phone, Plus, RefreshCw,
   Save, Search, Settings, ShieldCheck, Star, Trash2, Truck, UploadCloud, UserRound,
@@ -14,6 +14,7 @@ import {
   DEFAULT_MOVE_REQUEST_CUSTOMER_TEMPLATE,
   DEFAULT_MOVE_STATUS_TEMPLATES
 } from '../lib/whatsappTemplates';
+import { parseAdminPermissions } from '../lib/adminPermissions';
 
 const STATUS_COLOR = {
   received: '#0087b4', contacting: '#7c3aed', inspection_scheduled: '#b7791f', quote_sent: '#c2410c',
@@ -37,7 +38,7 @@ const TABS = [
   ['dashboard', CircleGauge, 'نظرة عامة'], ['requests', Truck, 'طلبات النقل'], ['schedule', CalendarDays, 'جدول التشغيل'],
   ['services', PackageCheck, 'الخدمات'], ['areas', MapPin, 'مناطق الخدمة'], ['customers', UsersRound, 'العملاء'],
   ['work', GalleryHorizontal, 'معرض الأعمال'], ['reviews', Star, 'آراء العملاء'], ['messages', MessageCircle, 'الرسائل'],
-  ['content', LayoutGrid, 'محتوى الموقع'], ['whatsapp', Phone, 'واتساب والقوالب'], ['about_agency', Headphones, 'حول S C Marketing'], ['settings', Settings, 'الإعدادات والتكاملات']
+  ['content', LayoutGrid, 'محتوى الموقع'], ['whatsapp', Phone, 'واتساب والقوالب'], ['users', UsersRound, 'حسابات الموظفين'], ['about_agency', Headphones, 'حول S C Marketing'], ['settings', Settings, 'الإعدادات والتكاملات']
 ];
 
 function StatCard({ icon: Icon, label, value, hint, color }) {
@@ -254,6 +255,93 @@ function WhatsAppAdmin({ settings, reload }) {
   </div>;
 }
 
+const ACCOUNT_PAGE_OPTIONS = TABS.filter(([id]) => id !== 'users');
+
+function PermissionPicker({ value, onChange, disabled }) {
+  const selected = new Set(parseAdminPermissions(value));
+  const toggle = (id) => {
+    if (id === 'dashboard' || disabled) return;
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    onChange(['dashboard', ...[...next].filter((item) => item !== 'dashboard')]);
+  };
+  return <div className={`jma-permission-grid ${disabled ? 'disabled' : ''}`}>{ACCOUNT_PAGE_OPTIONS.map(([id, Icon, label]) => <button type="button" className={disabled || selected.has(id) || id === 'dashboard' ? 'selected' : ''} key={id} onClick={() => toggle(id)} disabled={disabled}><span>{disabled || selected.has(id) || id === 'dashboard' ? <Check /> : <Icon />}</span><b>{label}</b>{id === 'dashboard' && !disabled && <small>أساسية</small>}</button>)}</div>;
+}
+
+function UsersAdmin({ currentUser }) {
+  const defaultPermissions = ['dashboard', 'requests', 'schedule', 'customers'];
+  const [users, setUsers] = useState([]);
+  const [form, setForm] = useState({ username: '', password: '', role: 'staff', permissions: defaultPermissions });
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false); const [message, setMessage] = useState(null);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/users', { cache: 'no-store' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر تحميل الحسابات');
+      setUsers(result.map((user) => ({ ...user, password: '', permissions: parseAdminPermissions(user.permissions) })));
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { loadUsers(); }, []);
+
+  const createUser = async (event) => {
+    event.preventDefault(); setSaving(true); setMessage(null);
+    try {
+      const response = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر إنشاء الحساب');
+      setForm({ username: '', password: '', role: 'staff', permissions: defaultPermissions });
+      setMessage({ type: 'success', text: 'تم إنشاء الحساب وتحديد صفحاته بنجاح.' });
+      await loadUsers();
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setSaving(false); }
+  };
+
+  const updateLocalUser = (id, patch) => setUsers((current) => current.map((user) => user.id === id ? { ...user, ...patch } : user));
+  const saveUser = async (user) => {
+    setSaving(true); setMessage(null);
+    try {
+      const response = await fetch(`/api/users/${user.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(user) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر حفظ الحساب');
+      setMessage({ type: 'success', text: `تم حفظ صلاحيات ${user.username}.` });
+      await loadUsers();
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setSaving(false); }
+  };
+  const deleteUser = async (user) => {
+    if (!window.confirm(`حذف حساب ${user.username}؟`)) return;
+    setSaving(true); setMessage(null);
+    try {
+      const response = await fetch(`/api/users/${user.id}`, { method: 'DELETE' });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'تعذر حذف الحساب');
+      setMessage({ type: 'success', text: 'تم حذف الحساب.' });
+      await loadUsers();
+    } catch (error) { setMessage({ type: 'error', text: error.message }); }
+    finally { setSaving(false); }
+  };
+
+  return <div className="jma-stack">
+    <div className="jma-page-title"><div><span>TEAM ACCESS</span><h2>حسابات الموظفين والصلاحيات</h2><p>أنشئ حسابًا وحدد الصفحات التي تظهر له داخل لوحة Joo Move.</p></div><button className="jma-btn ghost" onClick={loadUsers}><RefreshCw />تحديث</button></div>
+    {message && <div className={message.type === 'success' ? 'jma-form-success' : 'jma-form-error'}>{message.type === 'success' ? <Check /> : <AlertCircle />}{message.text}</div>}
+    <form className="jma-panel jma-user-create" onSubmit={createUser}>
+      <div className="jma-panel-head"><div><h3>إنشاء حساب جديد</h3><p>المدير يرى كل الصفحات، والموظف يرى الصفحات المحددة فقط.</p></div><span><UsersRound /></span></div>
+      <div className="jma-form-grid"><label><span>اسم المستخدم</span><input required minLength="3" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} /></label><label><span>كلمة المرور</span><input required minLength="6" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></label><label className="wide"><span>نوع الحساب</span><div className="jma-role-choice"><button type="button" className={form.role === 'staff' ? 'active' : ''} onClick={() => setForm({ ...form, role: 'staff' })}><UserRound />موظف بصلاحيات محددة</button><button type="button" className={form.role === 'admin' ? 'active admin' : ''} onClick={() => setForm({ ...form, role: 'admin' })}><ShieldCheck />مدير — كل الصلاحيات</button></div></label></div>
+      <div className="jma-permission-section"><div><b>الصفحات التي يراها الحساب</b><small>{form.role === 'admin' ? 'المدير يملك وصولًا كاملًا تلقائيًا.' : `${form.permissions.length} صفحات محددة`}</small></div><PermissionPicker value={form.permissions} disabled={form.role === 'admin'} onChange={(permissions) => setForm({ ...form, permissions })} /></div>
+      <button className="jma-btn primary" disabled={saving}><Plus />{saving ? 'جارٍ الإنشاء...' : 'إنشاء الحساب'}</button>
+    </form>
+    <div className="jma-user-list">{loading ? <div className="jma-panel jma-loading"><RefreshCw />جارٍ تحميل الحسابات...</div> : users.map((user) => <article className="jma-panel" key={user.id}>
+      <header><span>{user.username?.charAt(0).toUpperCase()}</span><div><input value={user.username} onChange={(e) => updateLocalUser(user.id, { username: e.target.value })} /><small>{Number(user.id) === Number(currentUser.id) ? 'حسابك الحالي' : `أُنشئ ${new Date(user.created_at).toLocaleDateString('ar-EG')}`}</small></div><select value={user.role === 'admin' ? 'admin' : 'staff'} onChange={(e) => updateLocalUser(user.id, { role: e.target.value })} disabled={Number(user.id) === Number(currentUser.id)}><option value="staff">موظف</option><option value="admin">مدير</option></select></header>
+      <label className="jma-user-password"><Lock /><input type="password" value={user.password || ''} onChange={(e) => updateLocalUser(user.id, { password: e.target.value })} placeholder="كلمة مرور جديدة — اتركها فارغة بدون تغيير" /></label>
+      <div className="jma-permission-section"><div><b>الصفحات المسموحة</b><small>{user.role === 'admin' ? 'وصول كامل' : `${user.permissions.length} صفحات`}</small></div><PermissionPicker value={user.permissions} disabled={user.role === 'admin'} onChange={(permissions) => updateLocalUser(user.id, { permissions })} /></div>
+      <footer><button className="jma-btn primary" disabled={saving} onClick={() => saveUser(user)}><Save />حفظ الحساب</button>{Number(user.id) !== Number(currentUser.id) && <button className="jma-btn danger" disabled={saving} onClick={() => deleteUser(user)}><Trash2 />حذف</button>}</footer>
+    </article>)}{!loading && !users.length && <div className="jma-panel jma-empty"><UsersRound /><p>لا توجد حسابات موظفين بعد.</p></div>}</div>
+  </div>;
+}
+
 function AboutAgency() {
   return <div className="jma-stack">
     <div className="jma-page-title"><div><span>ABOUT THE DEVELOPER</span><h2>حول S C Marketing</h2><p>الشريك الرقمي المسؤول عن تصميم وتطوير تجربة Joo Move.</p></div></div>
@@ -283,6 +371,11 @@ export default function JooAdmin({ navigate }) {
   const latestRequestIdRef = useRef(null);
   const notificationRef = useRef(null);
   const audioContextRef = useRef(null);
+  const isAdmin = auth?.role === 'admin';
+  const accountPermissions = parseAdminPermissions(auth?.permissions);
+  const allowedTabIds = new Set(isAdmin ? TABS.map(([id]) => id) : ['dashboard', ...accountPermissions.filter((id) => id !== 'users')]);
+  const visibleTabs = TABS.filter(([id]) => allowedTabIds.has(id));
+  const canViewRequests = allowedTabIds.has('requests');
 
   useEffect(() => {
     try {
@@ -358,7 +451,8 @@ export default function JooAdmin({ navigate }) {
         const previousLatestId = latestRequestIdRef.current;
         latestRequestIdRef.current = latestId;
         setData((current) => ({ ...current, requests }));
-        if (previousLatestId !== null && latestId > previousLatestId) playNotificationSound();
+        const canNotify = auth?.role === 'admin' || parseAdminPermissions(auth?.permissions).includes('requests');
+        if (canNotify && previousLatestId !== null && latestId > previousLatestId) playNotificationSound();
       } catch (error) {
         console.warn('[Admin Notifications] Request polling failed:', error.message);
       }
@@ -376,6 +470,10 @@ export default function JooAdmin({ navigate }) {
     return () => document.removeEventListener('mousedown', closeOnOutsideClick);
   }, [notificationsOpen]);
 
+  useEffect(() => {
+    if (auth && !allowedTabIds.has(active)) setActive('dashboard');
+  }, [auth, active]);
+
   if (!auth) return <AdminLogin onLogin={setAuth} />;
   const latestRequestId = data.requests.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
   const unreadCount = data.requests.filter((item) => Number(item.id) > seenRequestId).length;
@@ -388,6 +486,7 @@ export default function JooAdmin({ navigate }) {
   };
   const logout = () => { localStorage.removeItem('joo_admin_auth'); setAuth(null); };
   const render = () => {
+    if (!allowedTabIds.has(active)) return <Dashboard requests={data.requests} setActive={setActive} />;
     if (active === 'dashboard') return <Dashboard requests={data.requests} setActive={setActive} />;
     if (active === 'requests') return <Requests requests={data.requests} reload={load} />;
     if (active === 'schedule') return <Schedule requests={data.requests} />;
@@ -399,9 +498,10 @@ export default function JooAdmin({ navigate }) {
     if (active === 'messages') return <MessagesAdmin messages={data.messages} reload={load} />;
     if (active === 'content') return <ContentAdmin />;
     if (active === 'whatsapp') return <WhatsAppAdmin settings={data.settings} reload={load} />;
+    if (active === 'users' && isAdmin) return <UsersAdmin currentUser={auth} />;
     if (active === 'about_agency') return <AboutAgency />;
     if (active === 'settings') return <SettingsAdmin settings={data.settings} reload={load} />;
     return null;
   };
-  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/s-logo.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>Joo Move Admin</small></div></div><nav>{TABS.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{TABS.find(([id]) => id === active)?.[2]}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button><div className="jma-notification-wrap" ref={notificationRef}><button className={`jma-notify ${unreadCount ? 'has-unread' : ''}`} onClick={() => setNotificationsOpen((open) => !open)} aria-label="إشعارات الطلبات"><Bell />{unreadCount > 0 && <em>{unreadCount > 99 ? '99+' : unreadCount}</em>}</button>{notificationsOpen && <section className="jma-notification-menu"><header><div><b>إشعارات الطلبات</b><small>{unreadCount ? `${unreadCount} طلب غير مقروء` : 'لا توجد طلبات جديدة'}</small></div>{unreadCount > 0 && <button onClick={markNotificationsRead}><Check />قراءة الكل</button>}</header><div>{data.requests.slice(0, 6).map((request) => <button className={Number(request.id) > seenRequestId ? 'unread' : ''} key={request.id} onClick={openRequestsFromNotifications}><span>{request.customer_name?.charAt(0) || <Truck />}</span><div><b>طلب نقل جديد من {request.customer_name}</b><small>{request.request_number} • {request.origin_area} ← {request.destination_area}</small><time>{new Date(request.created_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</time></div></button>)}{!data.requests.length && <p><Bell />أول طلب جديد هيظهر هنا.</p>}</div><footer><button onClick={openRequestsFromNotifications}>عرض كل طلبات النقل<ChevronLeft /></button></footer></section>}</div><span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
+  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/s-logo.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>{isAdmin ? 'مدير النظام' : 'موظف Joo Move'}</small></div></div><nav>{visibleTabs.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{visibleTabs.find(([id]) => id === active)?.[2] || 'نظرة عامة'}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button>{canViewRequests && <div className="jma-notification-wrap" ref={notificationRef}><button className={`jma-notify ${unreadCount ? 'has-unread' : ''}`} onClick={() => setNotificationsOpen((open) => !open)} aria-label="إشعارات الطلبات"><Bell />{unreadCount > 0 && <em>{unreadCount > 99 ? '99+' : unreadCount}</em>}</button>{notificationsOpen && <section className="jma-notification-menu"><header><div><b>إشعارات الطلبات</b><small>{unreadCount ? `${unreadCount} طلب غير مقروء` : 'لا توجد طلبات جديدة'}</small></div>{unreadCount > 0 && <button onClick={markNotificationsRead}><Check />قراءة الكل</button>}</header><div>{data.requests.slice(0, 6).map((request) => <button className={Number(request.id) > seenRequestId ? 'unread' : ''} key={request.id} onClick={openRequestsFromNotifications}><span>{request.customer_name?.charAt(0) || <Truck />}</span><div><b>طلب نقل جديد من {request.customer_name}</b><small>{request.request_number} • {request.origin_area} ← {request.destination_area}</small><time>{new Date(request.created_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</time></div></button>)}{!data.requests.length && <p><Bell />أول طلب جديد هيظهر هنا.</p>}</div><footer><button onClick={openRequestsFromNotifications}>عرض كل طلبات النقل<ChevronLeft /></button></footer></section>}</div>}<span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
 }
