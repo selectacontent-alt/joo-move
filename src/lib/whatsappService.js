@@ -60,10 +60,27 @@ async function ensureWaJsInjected(client) {
     return true;
   }
 
-  console.log('[WhatsApp] Injecting WA-JS delivery engine from CDN...');
-  await page.addScriptTag({ url: 'https://unpkg.com/@wppconnect/wa-js@latest/dist/wppconnect-wa.js' }).catch(e => {
-    console.warn('[WhatsApp] Could not load WA-JS from CDN:', e.message);
-  });
+  console.log('[WhatsApp] Injecting WA-JS delivery engine locally (bypassing CSP)...');
+  let bundlePath = null;
+  try {
+    bundlePath = require.resolve('@wppconnect/wa-js');
+  } catch (e) {
+    bundlePath = path.join(process.cwd(), 'node_modules', '@wppconnect', 'wa-js', 'dist', 'wppconnect-wa.js');
+  }
+
+  if (fs.existsSync(bundlePath)) {
+    const content = fs.readFileSync(bundlePath, 'utf8');
+    await page.evaluate((scriptContent) => {
+      const script = document.createElement('script');
+      script.type = 'text/javascript';
+      script.text = scriptContent;
+      document.head.appendChild(script);
+    }, content).catch(e => {
+      console.warn('[WhatsApp] Could not inject WA-JS script:', e.message);
+    });
+  } else {
+    console.warn('[WhatsApp] WA-JS bundle not found at:', bundlePath);
+  }
 
   await page.evaluate(() => {
     if (window.WPP && window.WPP.webpack && typeof window.WPP.webpack.inject === 'function') {
@@ -71,7 +88,7 @@ async function ensureWaJsInjected(client) {
     }
   }).catch(() => {});
 
-  await page.waitForFunction(() => Boolean(window.WPP?.isReady), { timeout: WAJS_INJECT_TIMEOUT_MS });
+  await page.waitForFunction(() => Boolean(window.WPP?.isReady), { timeout: 60000 });
   console.log('[WhatsApp] WA-JS delivery engine is ready.');
   return true;
 }
