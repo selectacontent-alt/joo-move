@@ -25,7 +25,7 @@ const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_
 const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
-const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND !== 'false';
+const VERIFY_NUMBER_BEFORE_SEND = false;
 const USE_WAJS_SEND = process.env.WHATSAPP_USE_WAJS_SEND !== 'false';
 const CLOCK_EMOJI = '\u{1F552}';
 const MESSAGE_ACK_LABELS = {
@@ -1293,27 +1293,6 @@ async function executeSendMessage(task) {
       }
     } else {
       console.log(`[WhatsApp Queue] Sending directly to ${chatId}; number lookup is disabled for faster delivery.`);
-    }
-
-    console.log(`[WhatsApp Queue] Showing typing state to ${chatId} for ${TYPING_DELAY_MS / 1000} seconds...`);
-    let chat = null;
-    try {
-      chat = await state.client.getChatById(chatId);
-      await chat.sendStateTyping();
-    } catch (typingError) {
-      console.warn(`[WhatsApp Queue] Could not start typing state for ${chatId}:`, typingError.message);
-    }
-
-    if (TYPING_DELAY_MS > 0) {
-      await sleep(TYPING_DELAY_MS);
-    }
-
-    if (chat) {
-      try {
-        await chat.clearState();
-      } catch (clearStateError) {
-        console.warn(`[WhatsApp Queue] Could not clear typing state for ${chatId}:`, clearStateError.message);
-      }
     }
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
