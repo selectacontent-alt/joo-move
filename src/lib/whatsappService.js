@@ -7,14 +7,15 @@ import { getPuppeteerLaunchOptions } from './puppeteerConfig';
 const DEFAULT_AUTH_FOLDER = '.wwebjs_auth';
 const DEFAULT_QUEUE_FOLDER = '.wwebjs_queue';
 const QUEUE_FILE_NAME = 'messages.json';
-const DEFAULT_CLIENT_ID = 'al-rehab-client';
+const DEFAULT_CLIENT_ID = 'joo-move-client';
 
 const QUEUE_MIN_DELAY_MS = readPositiveIntEnv('WHATSAPP_QUEUE_MIN_DELAY_MS', 5000);
 const QUEUE_MAX_DELAY_MS = Math.max(
   QUEUE_MIN_DELAY_MS,
   readPositiveIntEnv('WHATSAPP_QUEUE_MAX_DELAY_MS', 10000)
 );
-const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 30000);
+const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 90000);
+const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
 const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 4000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
@@ -1100,6 +1101,27 @@ async function executeSendMessage(task) {
       chatId = numberId._serialized || chatId;
     } else {
       console.log(`[WhatsApp Queue] Sending directly to ${chatId}; number lookup is disabled for faster delivery.`);
+    }
+
+    console.log(`[WhatsApp Queue] Showing typing state to ${chatId} for ${TYPING_DELAY_MS / 1000} seconds...`);
+    let chat = null;
+    try {
+      chat = await state.client.getChatById(chatId);
+      await chat.sendStateTyping();
+    } catch (typingError) {
+      console.warn(`[WhatsApp Queue] Could not start typing state for ${chatId}:`, typingError.message);
+    }
+
+    if (TYPING_DELAY_MS > 0) {
+      await sleep(TYPING_DELAY_MS);
+    }
+
+    if (chat) {
+      try {
+        await chat.clearState();
+      } catch (clearStateError) {
+        console.warn(`[WhatsApp Queue] Could not clear typing state for ${chatId}:`, clearStateError.message);
+      }
     }
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
