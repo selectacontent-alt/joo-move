@@ -63,6 +63,13 @@ async function ensureWaJsInjected(client) {
 
   console.log('[WhatsApp] Injecting WA-JS delivery engine...');
   await page.addScriptTag({ path: bundlePath });
+
+  await page.evaluate(() => {
+    if (window.WPP && window.WPP.webpack && typeof window.WPP.webpack.inject === 'function') {
+      window.WPP.webpack.inject();
+    }
+  }).catch(() => {});
+
   await page.waitForFunction(() => Boolean(window.WPP?.isReady), { timeout: WAJS_INJECT_TIMEOUT_MS });
   console.log('[WhatsApp] WA-JS delivery engine is ready.');
   return true;
