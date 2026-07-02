@@ -1138,48 +1138,72 @@ async function executeSendMessage(task) {
        const isLid = String(sentMessage.id._serialized).includes('@lid');
        if (sentMessage.ack === -1 || isLid) {
            try {
-             await state.client.pupPage.evaluate(async (phone, msgText) => {
+             const fallbackResult = await state.client.pupPage.evaluate(async (phone, msgText) => {
                const numberStr = String(phone).replace(/\D/g, '');
                
-               // 1. Click "New Chat" button
-               const newChatBtn = document.querySelector('span[data-icon="chat"]');
-               if (!newChatBtn) return;
+               // 1. Click "New Chat" button (Try multiple selectors)
+               const newChatSelectors = [
+                 'span[data-icon="new-chat-outline"]',
+                 'span[data-icon="chat"]',
+                 'div[title="New chat"]',
+                 'div[title="دردشة جديدة"]'
+               ];
+               
+               let newChatBtn = null;
+               for (const sel of newChatSelectors) {
+                 newChatBtn = document.querySelector(sel);
+                 if (newChatBtn) break;
+               }
+               
+               if (!newChatBtn) return 'NEW_CHAT_BTN_NOT_FOUND';
                newChatBtn.parentElement.click();
                
-               await new Promise(r => setTimeout(r, 1000));
+               await new Promise(r => setTimeout(r, 1500));
                
                // 2. Type number in search
-               const searchBox = document.querySelector('div[contenteditable="true"]');
-               if (!searchBox) return;
+               const searchBox = document.querySelector('div[contenteditable="true"][data-tab="3"]') || document.activeElement;
+               if (!searchBox || searchBox.tagName !== 'DIV') return 'SEARCH_BOX_NOT_FOUND';
                searchBox.focus();
                document.execCommand('insertText', false, numberStr);
                
-               await new Promise(r => setTimeout(r, 2000));
+               await new Promise(r => setTimeout(r, 3000)); // wait for search results
                
                // 3. Click the contact
                const contactNodes = Array.from(document.querySelectorAll('div[role="listitem"]'));
-               if (contactNodes.length > 0) {
-                 const contact = contactNodes[0];
-                 contact.click();
-                 
-                 await new Promise(r => setTimeout(r, 1000));
-                 
-                 // 4. Type message
-                 const msgBox = Array.from(document.querySelectorAll('div[contenteditable="true"]')).pop();
-                 if (msgBox) {
-                   msgBox.focus();
-                   document.execCommand('insertText', false, msgText);
-                   
-                   await new Promise(r => setTimeout(r, 500));
-                   
-                   // 5. Click Send
-                   const sendBtn = document.querySelector('span[data-icon="send"]');
-                   if (sendBtn) sendBtn.parentElement.click();
-                 }
+               if (contactNodes.length === 0) return 'CONTACT_NOT_FOUND';
+               
+               // The first contact in search results
+               contactNodes[0].click();
+               
+               await new Promise(r => setTimeout(r, 1500)); // wait for chat to open
+               
+               // 4. Type message
+               const msgBoxes = Array.from(document.querySelectorAll('div[contenteditable="true"]'));
+               const msgBox = msgBoxes[msgBoxes.length - 1]; // usually the chat input is the last one
+               if (!msgBox) return 'MSG_BOX_NOT_FOUND';
+               
+               msgBox.focus();
+               document.execCommand('insertText', false, msgText);
+               
+               await new Promise(r => setTimeout(r, 500));
+               
+               // 5. Click Send
+               const sendBtn = document.querySelector('span[data-icon="send"]');
+               if (sendBtn) {
+                   sendBtn.parentElement.click();
+                   return 'SUCCESS';
                }
+               
+               // Try hitting Enter if send button not found
+               const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+               msgBox.dispatchEvent(event);
+               return 'SUCCESS_VIA_ENTER';
+               
              }, chatId, task.message);
+             
+             console.log(`[WhatsApp Queue] Silent UI Fallback result: ${fallbackResult}`);
            } catch(e) {
-             // Silent fallback catch
+             console.log(`[WhatsApp Queue] Silent UI Fallback encountered error: ${e.message}`);
            }
        }
     } else {
