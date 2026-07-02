@@ -363,7 +363,7 @@ export default function JooAdmin({ navigate }) {
         console.warn('[Admin Notifications] Request polling failed:', error.message);
       }
     };
-    const timer = window.setInterval(pollRequests, 10000);
+    const timer = window.setInterval(pollRequests, 5000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [auth]);
 
