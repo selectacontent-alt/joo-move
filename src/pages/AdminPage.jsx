@@ -3536,44 +3536,24 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                     </div>
                   ) : waStatus === 'WAITING_FOR_SCAN' ? (
                     <div style={{ padding: '2rem', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
-                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.2rem' }}>ربط الواتساب (اختر الطريقة الأنسب لك)</p>
+                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.2rem', textAlign: 'center' }}>ربط الواتساب (مطلوب مسح الباركود)</p>
                       
-                      {/* Option 1: QR Code */}
-                      {waQr && (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px dashed #cbd5e1' }}>
-                          <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '1rem' }}><strong>الطريقة الأولى (موصى بها):</strong> افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز، ثم امسح الكود التالي بالكاميرا:</p>
-                          <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(waQr)}&size=250x250`} alt="WhatsApp QR Code" style={{ width: '250px', height: '250px', border: '2px solid var(--primary-color)', borderRadius: '15px', padding: '10px', background: '#fff' }} />
+                      {/* QR Code Only */}
+                      {waQr ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem' }}>
+                          <p style={{ color: '#ef4444', fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 'bold', background: '#fef2f2', padding: '1rem', borderRadius: '10px', textAlign: 'center' }}>
+                            تنبيه: تم إيقاف الربط برقم الهاتف نهائياً بسبب أعطال من شركة واتساب نفسها.<br />
+                            <strong>يجب استخدام كاميرا الموبايل لمسح هذا الباركود!</strong>
+                          </p>
+                          <p style={{ color: '#334155', fontSize: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
+                            افتح الواتساب على موبايلك &gt; الأجهزة المرتبطة &gt; ربط بجهاز &gt; وجه الكاميرا للمربع الأسفل:
+                          </p>
+                          <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(waQr)}&size=300x300&margin=10`} alt="WhatsApp QR Code" style={{ width: '300px', height: '300px', border: '3px solid #10b981', borderRadius: '15px', padding: '10px', background: '#fff', boxShadow: '0 10px 25px rgba(16, 185, 129, 0.2)' }} />
+                          <button onClick={handleWaRestart} style={{ marginTop: '1.5rem', background: '#64748b', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>تحديث الباركود لو مش شغال</button>
                         </div>
+                      ) : (
+                         <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>جاري تحميل الباركود، يرجى الانتظار...</div>
                       )}
-
-                      {/* Option 2: Pairing Code */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                        <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '1rem' }}><strong>الطريقة الثانية (قد تواجه أعطال حالياً):</strong> الربط عن طريق رقم الهاتف</p>
-                        {!waPairingCode ? (
-                          <form onSubmit={handleRequestPairingCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', width: '100%' }}>
-                            <input
-                              type="text"
-                              placeholder="مثال مفتاح الدولة بدون +: 201012345678"
-                              value={waPairingPhone}
-                              onChange={e => setWaPairingPhone(e.target.value)}
-                              style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid #cbd5e1', width: '100%', maxWidth: '300px', textAlign: 'center', fontSize: '1.1rem', direction: 'ltr' }}
-                              required
-                            />
-                            <button type="submit" disabled={waPairingLoading} className="btn-admin" style={{ background: 'var(--primary-color)', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem', width: '100%', maxWidth: '300px' }}>
-                              {waPairingLoading ? 'جاري الطلب...' : 'الحصول على الكود'}
-                            </button>
-                            {waPairingError && <p style={{ color: '#ef4444', fontSize: '0.9rem', marginTop: '0.5rem', maxWidth: '300px', textAlign: 'center' }}>{waPairingError}</p>}
-                          </form>
-                        ) : (
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                            <p style={{ color: '#334155', fontSize: '1rem' }}>افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز &gt; الربط برقم الهاتف بدلاً من ذلك. ثم أدخل الكود التالي:</p>
-                            <div style={{ fontSize: '2.5rem', letterSpacing: '0.5rem', fontWeight: '900', color: 'var(--primary-color)', background: '#fff', padding: '1.5rem', borderRadius: '15px', border: '2px dashed var(--primary-color)' }}>
-                              {waPairingCode}
-                            </div>
-                            <button type="button" onClick={() => setWaPairingCode('')} style={{ background: 'transparent', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', marginTop: '1rem' }}>إلغاء والمحاولة مرة أخرى</button>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   ) : waStatus === 'ERROR_NO_BACKEND' ? (
                     <div style={{ padding: '2rem', background: '#fef2f2', borderRadius: '15px', border: '1px solid #fecaca', color: '#ef4444', fontWeight: 'bold' }}>
