@@ -33,16 +33,17 @@ html[lang='en'] .jm-app, html[lang='en'] .jm-app button, html[lang='en'] .jm-app
 .jm-header { height: 84px; position: absolute; top: 34px; width: 100%; z-index: 50; color: white; transition: background .24s var(--jm-ease), height .24s var(--jm-ease), box-shadow .24s var(--jm-ease); }
 .jm-header-solid { background: rgba(4, 31, 49, .94); backdrop-filter: blur(18px); box-shadow: 0 10px 35px rgba(4,31,49,.16); }
 .jm-header-scrolled { position: fixed; top: 0; height: 72px; }
-.jm-nav { height: 100%; display: flex; align-items: center; gap: 34px; }
-.jm-logo-button { border: 0; background: transparent; padding: 0; display: grid; place-items: center; }
+.jm-nav { height: 100%; display: flex; align-items: center; gap: 34px; direction: ltr; }
+.jm-logo-button { border: 0; background: transparent; padding: 0; display: grid; place-items: center; flex: 0 0 auto; }
 .jm-logo { width: 150px; height: 58px; object-fit: contain; transition: filter .2s; }
 .jm-logo-inverse { filter: brightness(0) invert(1); }
 .jm-nav-links { flex: 1; display: flex; justify-content: center; align-items: center; gap: 26px; }
+html[dir="rtl"] .jm-nav-links { direction: rtl; }
 .jm-nav-links button { position: relative; background: none; border: 0; color: inherit; padding: 10px 0; font-size: 13px; font-weight: 600; opacity: .82; }
 .jm-nav-links button::after { content: ''; height: 2px; width: 0; border-radius: 2px; background: var(--jm-cyan); position: absolute; inset-inline-start: 0; bottom: 3px; transition: width .24s var(--jm-ease); }
 .jm-nav-links button:hover, .jm-nav-links button.active { opacity: 1; }
 .jm-nav-links button:hover::after, .jm-nav-links button.active::after { width: 100%; }
-.jm-nav-actions { display: flex; align-items: center; gap: 9px; }
+.jm-nav-actions { display: flex; align-items: center; gap: 9px; margin-left: auto; direction: ltr; }
 .jm-language, .jm-menu { border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.08); color: white; border-radius: 12px; height: 42px; padding: 0 12px; display: inline-flex; align-items: center; gap: 7px; font-weight: 700; }
 .jm-menu { display: none; width: 42px; padding: 0; justify-content: center; }
 .jm-mobile-menu { display: none; }
