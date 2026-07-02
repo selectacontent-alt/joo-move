@@ -1326,7 +1326,7 @@ async function requestPairingCodeSilentFallback(client, phoneNumber) {
 
   const clickedLink = await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll('span[role="button"]'));
-    const linkBtn = btns.find(b => b.innerText.includes('Link with phone number') || b.innerText.includes('ÑÈØ ÈÑÞã åÇÊÝ'));
+    const linkBtn = btns.find(b => b.innerText.includes('Link with phone number') || b.innerText.includes('Ø±Ø¨Ø· Ø¨Ø±Ù‚Ù… Ù‡Ø§ØªÙ'));
     if (linkBtn) {
       linkBtn.click();
       return true;
@@ -1362,7 +1362,7 @@ async function requestPairingCodeSilentFallback(client, phoneNumber) {
 
   await page.evaluate(() => {
     const btns = Array.from(document.querySelectorAll('div[role="button"]'));
-    const nextBtn = btns.find(b => b.innerText === 'Next' || b.innerText === 'ÇáÊÇáí');
+    const nextBtn = btns.find(b => b.innerText === 'Next' || b.innerText === 'Ø§Ù„ØªØ§Ù„ÙŠ');
     if (nextBtn) nextBtn.click();
   });
 
