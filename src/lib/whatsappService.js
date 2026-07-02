@@ -16,15 +16,27 @@ const QUEUE_MAX_DELAY_MS = Math.max(
 );
 const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 90000);
 const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
-const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 4000);
+const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 10000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
 const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
 const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
-const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND === 'true';
+const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND !== 'false';
 const CLOCK_EMOJI = '\u{1F552}';
+const MESSAGE_ACK_LABELS = {
+  [-1]: 'error',
+  0: 'pending',
+  1: 'received-by-server',
+  2: 'delivered-to-device',
+  3: 'read',
+  4: 'played'
+};
+
+function getMessageId(message) {
+  return message?.id?._serialized || message?.id?.id || 'unknown';
+}
 
 if (!global.whatsappState) {
   global.whatsappState = {
@@ -544,6 +556,12 @@ export function initializeWhatsApp(options = {}) {
   state.client.on('authenticated', () => {
     console.log('WhatsApp AUTHENTICATED');
     state.status = 'AUTHENTICATED';
+  });
+
+  state.client.on('message_ack', (message, ack) => {
+    const recipient = message?.to || message?.id?.remote || 'unknown';
+    const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
+    console.log(`[WhatsApp ACK] Message ${getMessageId(message)} to ${recipient}: ${ack} (${ackLabel})`);
   });
 
   state.client.on('auth_failure', (msg) => {
@@ -1126,6 +1144,7 @@ async function executeSendMessage(task) {
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
 
+    let sentMessage;
     if (mediaUrl) {
       let media;
       if (mediaUrl.startsWith('http')) {
@@ -1136,13 +1155,16 @@ async function executeSendMessage(task) {
         media = await MessageMedia.fromUrl(mediaUrl);
       }
 
-      await state.client.sendMessage(chatId, media, { caption: task.message });
+      sentMessage = await state.client.sendMessage(chatId, media, { caption: task.message });
     } else {
-      await state.client.sendMessage(chatId, task.message);
+      sentMessage = await state.client.sendMessage(chatId, task.message);
     }
 
-    console.log(`[WhatsApp Queue] Sent successfully to ${chatId}`);
-    return true;
+    const messageId = getMessageId(sentMessage);
+    const ack = Number.isInteger(sentMessage?.ack) ? sentMessage.ack : 0;
+    const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
+    console.log(`[WhatsApp Queue] Accepted by WhatsApp for ${chatId}. Message ID: ${messageId}. ACK: ${ack} (${ackLabel})`);
+    return { sent: true, messageId, ack };
   });
 }
 
