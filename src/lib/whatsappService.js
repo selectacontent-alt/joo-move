@@ -668,8 +668,25 @@ function handleInitializationError(error) {
   scheduleReconnect(INIT_RETRY_COOLDOWN_MS);
 }
 
-export function initializeWhatsApp(options = {}) {
+export async function initializeWhatsApp(options = {}) {
   const state = global.whatsappState;
+
+  // Auto-wipe the corrupted LID session once on the host server
+  try {
+    const flagFile = path.join(process.cwd(), '.session_wiped');
+    if (!fs.existsSync(flagFile)) {
+      console.log('[WhatsApp] Performing one-time session wipe to clear corrupted LID cache...');
+      const wipeAuthDir = getAuthDir();
+      if (fs.existsSync(wipeAuthDir)) {
+        fs.rmSync(wipeAuthDir, { recursive: true, force: true });
+      }
+      fs.writeFileSync(flagFile, 'wiped');
+      console.log('[WhatsApp] One-time session wipe completed successfully.');
+    }
+  } catch (e) {
+    console.warn('[WhatsApp] Could not perform one-time session wipe:', e.message);
+  }
+
   if (state.isInitialized || state.isRestarting) return;
 
   ensureQueueLoaded();
