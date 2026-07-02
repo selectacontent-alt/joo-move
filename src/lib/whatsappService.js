@@ -986,25 +986,148 @@ export async function requestPairingCode(phoneNumber) {
   state.isRequestingPairingCode = true;
 
   try {
-    // A pairing-code browser session can remain bound to the first phone number.
-    // Always create a fresh session so switching numbers never reuses stale state.
     await restartLinkingSession();
     const pairingClient = await waitForPairingClient();
 
-    const codePromise = pairingClient.requestPairingCode(cleanedNumber);
-    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout requesting pairing code')), 60000));
-    
-    const code = await Promise.race([codePromise, timeoutPromise]);
+    let code;
+    try {
+      console.log('[WhatsApp] Attempting native requestPairingCode API...');
+      const codePromise = pairingClient.requestPairingCode(cleanedNumber);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout requesting pairing code via API')), 45000));
+      code = await Promise.race([codePromise, timeoutPromise]);
+    } catch (apiError) {
+      console.warn(`[WhatsApp] Native API failed (${apiError.message}). Falling back to UI Automation for Pairing Code...`);
+      code = await requestPairingCodeViaUI(pairingClient, cleanedNumber);
+    }
+
+    if (!code) {
+      throw new Error('لم يتم إرجاع أي كود.');
+    }
+
     state.pairingPhoneNumber = cleanedNumber;
     state.pairingCodeIssuedAt = Date.now();
     return code;
   } catch (error) {
-    console.error('[WhatsApp] Failed to request pairing code:', error);
+    console.error('[WhatsApp] Failed to request pairing code completely:', error);
     clearPairingAttemptState();
     throw new Error(`تعذر إنشاء كود الربط: ${getErrorMessage(error)}`);
   } finally {
     state.isRequestingPairingCode = false;
   }
+}
+
+/**
+ * Fallback to generate pairing code by physically interacting with the DOM
+ * Bypasses WhatsApp Web API changes and t: t errors.
+ */
+async function requestPairingCodeViaUI(client, phoneNumber) {
+  const page = client.pupPage;
+  if (!page) throw new Error("Browser page not found for UI automation.");
+
+  // 1. Click "Link with phone number"
+  await page.evaluate(async () => {
+    const findLinkButton = () => {
+      const els = Array.from(document.querySelectorAll('span, div, button'));
+      return els.find(el => {
+        const text = el.innerText || '';
+        return text.includes('Link with phone number') || text.includes('الربط برقم') || text.includes('Link with phone');
+      });
+    };
+    
+    let btn = findLinkButton();
+    if (!btn) {
+      await new Promise(r => setTimeout(r, 2000));
+      btn = findLinkButton();
+    }
+    
+    if (btn) {
+      btn.click();
+    } else {
+      throw new Error("Link with phone number button not found on screen.");
+    }
+  });
+
+  // 2. Wait for the phone number input
+  // WhatsApp web pairing screen uses a single input or a split input.
+  // We'll wait a moment for the transition
+  await new Promise(r => setTimeout(r, 2000));
+  
+  // 3. Find input and type number
+  await page.evaluate(async (num) => {
+    // Find editable inputs. Usually there is an input for phone number.
+    const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
+    // The phone number input is usually the last one, or the one with text direction ltr
+    const phoneInput = inputs.length > 1 ? inputs[inputs.length - 1] : inputs[0];
+    
+    if (!phoneInput) throw new Error("Phone number input not found.");
+    
+    // Clear existing
+    phoneInput.value = '';
+    
+    // Sometimes WA Web splits country code. But usually pasting the whole number works if we clear first.
+    phoneInput.focus();
+    document.execCommand('insertText', false, num);
+    
+    // Press Enter or click Next
+    const findNextButton = () => {
+      const els = Array.from(document.querySelectorAll('span, div, button'));
+      return els.find(el => {
+        const text = el.innerText || '';
+        return text === 'Next' || text === 'التالي';
+      });
+    };
+    
+    setTimeout(() => {
+      const nextBtn = findNextButton();
+      if (nextBtn) nextBtn.click();
+      else {
+        // Fallback: trigger Enter
+        const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
+        phoneInput.dispatchEvent(event);
+      }
+    }, 500);
+  }, phoneNumber);
+
+  // 4. Wait for the code to appear
+  // The code is an 8-character string with a hyphen, usually inside a specific data-testid="pairing-code" or similar.
+  // We'll poll the DOM for 8 characters that look like a code.
+  const code = await page.evaluate(async () => {
+    return new Promise((resolve, reject) => {
+      let attempts = 0;
+      const interval = setInterval(() => {
+        attempts++;
+        if (attempts > 30) {
+          clearInterval(interval);
+          reject(new Error("Timeout waiting for pairing code UI to generate code."));
+          return;
+        }
+        
+        // Search for data-testid="pairing-code" or any element containing exactly 8 uppercase letters/numbers separated by spaces/hyphens
+        const spans = Array.from(document.querySelectorAll('span, div[role="button"] > div'));
+        
+        // WhatsApp Web usually renders the code as data-testid="linking-code" or "pairing-code"
+        const specificEl = document.querySelector('[data-testid="pairing-code"], [data-testid="linking-code"], [data-ref]');
+        if (specificEl && specificEl.innerText && specificEl.innerText.replace(/[^A-Z0-9]/g, '').length === 8) {
+           clearInterval(interval);
+           resolve(specificEl.innerText.replace(/[^A-Z0-9]/g, ''));
+           return;
+        }
+
+        // Heuristic: 8 characters split into spans
+        for (const span of spans) {
+          const text = span.innerText || '';
+          const cleaned = text.replace(/[^A-Z0-9]/g, '');
+          if (cleaned.length === 8 && /^[A-Z0-9]+$/.test(cleaned) && text.includes('-')) {
+            clearInterval(interval);
+            resolve(cleaned);
+            return;
+          }
+        }
+      }, 1000);
+    });
+  });
+
+  return code;
 }
 
 export async function restartLinkingSession() {
