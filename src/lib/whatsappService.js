@@ -1324,9 +1324,15 @@ async function requestPairingCodeSilentFallback(client, phoneNumber) {
   const page = client.pupPage;
   if (!page) throw new Error('Page not ready for fallback');
 
+  // Wait for the Link button to render
+  await page.waitForFunction(() => {
+    const elements = Array.from(document.querySelectorAll('span, div, button'));
+    return elements.some(b => b.innerText && (b.innerText.includes('Link with phone') || b.innerText.includes('ربط برقم هاتف')));
+  }, { timeout: 15000 }).catch(() => {});
+
   const clickedLink = await page.evaluate(() => {
-    const btns = Array.from(document.querySelectorAll('span[role="button"]'));
-    const linkBtn = btns.find(b => b.innerText.includes('Link with phone number') || b.innerText.includes('ربط برقم هاتف'));
+    const elements = Array.from(document.querySelectorAll('span, div, button'));
+    const linkBtn = elements.find(b => b.innerText && (b.innerText.includes('Link with phone') || b.innerText.includes('ربط برقم هاتف')) && b.innerText.length < 50);
     if (linkBtn) {
       linkBtn.click();
       return true;
