@@ -1138,70 +1138,100 @@ async function executeSendMessage(task) {
        const isLid = String(sentMessage.id._serialized).includes('@lid');
        if (sentMessage.ack === -1 || isLid) {
            try {
-             const fallbackResult = await state.client.pupPage.evaluate(async (phone, msgText) => {
-               const numberStr = String(phone).replace(/\D/g, '');
-               
-               // 1. Click "New Chat" button (Try multiple selectors)
+             const result = await state.client.pupPage.evaluate(async () => {
+               // 1. Click "New Chat" button
                const newChatSelectors = [
                  'span[data-icon="new-chat-outline"]',
                  'span[data-icon="chat"]',
                  'div[title="New chat"]',
                  'div[title="دردشة جديدة"]'
                ];
-               
-               let newChatBtn = null;
+               let btn = null;
                for (const sel of newChatSelectors) {
-                 newChatBtn = document.querySelector(sel);
-                 if (newChatBtn) break;
+                 btn = document.querySelector(sel);
+                 if (btn) break;
                }
-               
-               if (!newChatBtn) return 'NEW_CHAT_BTN_NOT_FOUND';
-               newChatBtn.parentElement.click();
-               
-               await new Promise(r => setTimeout(r, 1500));
-               
-               // 2. Type number in search
-               const searchBox = document.querySelector('div[contenteditable="true"][data-tab="3"]') || document.activeElement;
-               if (!searchBox || searchBox.tagName !== 'DIV') return 'SEARCH_BOX_NOT_FOUND';
-               searchBox.focus();
-               document.execCommand('insertText', false, numberStr);
-               
-               await new Promise(r => setTimeout(r, 3000)); // wait for search results
-               
-               // 3. Click the contact
-               const contactNodes = Array.from(document.querySelectorAll('div[role="listitem"]'));
-               if (contactNodes.length === 0) return 'CONTACT_NOT_FOUND';
-               
-               // The first contact in search results
-               contactNodes[0].click();
-               
-               await new Promise(r => setTimeout(r, 1500)); // wait for chat to open
-               
-               // 4. Type message
-               const msgBoxes = Array.from(document.querySelectorAll('div[contenteditable="true"]'));
-               const msgBox = msgBoxes[msgBoxes.length - 1]; // usually the chat input is the last one
-               if (!msgBox) return 'MSG_BOX_NOT_FOUND';
-               
-               msgBox.focus();
-               document.execCommand('insertText', false, msgText);
-               
-               await new Promise(r => setTimeout(r, 500));
-               
-               // 5. Click Send
-               const sendBtn = document.querySelector('span[data-icon="send"]');
-               if (sendBtn) {
-                   sendBtn.parentElement.click();
-                   return 'SUCCESS';
-               }
-               
-               // Try hitting Enter if send button not found
-               const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
-               msgBox.dispatchEvent(event);
-               return 'SUCCESS_VIA_ENTER';
-               
-             }, chatId, task.message);
+               if (!btn) return 'NEW_CHAT_BTN_NOT_FOUND';
+               btn.parentElement.click();
+               return 'CLICKED_NEW_CHAT';
+             });
              
-             console.log(`[WhatsApp Queue] Silent UI Fallback result: ${fallbackResult}`);
+             if (result !== 'CLICKED_NEW_CHAT') {
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: ${result}`);
+                 return true;
+             }
+             
+             await new Promise(r => setTimeout(r, 1500));
+             
+             const searchBoxReady = await state.client.pupPage.evaluate(() => {
+                const searchBoxes = Array.from(document.querySelectorAll('div[contenteditable="true"], p[contenteditable="true"]'));
+                let box = searchBoxes[0];
+                if (document.activeElement && document.activeElement.isContentEditable) {
+                    box = document.activeElement;
+                }
+                if (!box) return false;
+                box.id = 'wa-custom-search-box';
+                return true;
+             });
+             
+             if (!searchBoxReady) {
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: SEARCH_BOX_NOT_FOUND`);
+                 return true;
+             }
+             
+             await state.client.pupPage.type('#wa-custom-search-box', formatted, { delay: 50 });
+             
+             await new Promise(r => setTimeout(r, 3000));
+             
+             const contactClicked = await state.client.pupPage.evaluate(() => {
+                const contactNodes = Array.from(document.querySelectorAll('div[role="listitem"]'));
+                if (contactNodes.length === 0) return false;
+                contactNodes[0].click();
+                return true;
+             });
+             
+             if (!contactClicked) {
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: CONTACT_NOT_FOUND`);
+                 // Press Escape to close the drawer if not found
+                 await state.client.pupPage.keyboard.press('Escape');
+                 return true;
+             }
+             
+             await new Promise(r => setTimeout(r, 1500));
+             
+             const msgBoxReady = await state.client.pupPage.evaluate(() => {
+                const msgBoxes = Array.from(document.querySelectorAll('div[contenteditable="true"], p[contenteditable="true"]'));
+                const msgBox = msgBoxes[msgBoxes.length - 1];
+                if (!msgBox) return false;
+                msgBox.id = 'wa-custom-msg-box';
+                return true;
+             });
+             
+             if (!msgBoxReady) {
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: MSG_BOX_NOT_FOUND`);
+                 return true;
+             }
+             
+             await state.client.pupPage.type('#wa-custom-msg-box', task.message, { delay: 20 });
+             
+             await new Promise(r => setTimeout(r, 500));
+             
+             const sent = await state.client.pupPage.evaluate(() => {
+                 const sendBtn = document.querySelector('span[data-icon="send"]');
+                 if (sendBtn) {
+                     sendBtn.parentElement.click();
+                     return 'SUCCESS';
+                 }
+                 return 'SEND_BTN_NOT_FOUND';
+             });
+             
+             if (sent === 'SEND_BTN_NOT_FOUND') {
+                 await state.client.pupPage.keyboard.press('Enter');
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: SUCCESS_VIA_ENTER`);
+             } else {
+                 console.log(`[WhatsApp Queue] Silent UI Fallback result: SUCCESS`);
+             }
+             
            } catch(e) {
              console.log(`[WhatsApp Queue] Silent UI Fallback encountered error: ${e.message}`);
            }
