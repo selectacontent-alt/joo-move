@@ -51,18 +51,19 @@ function getWaJsBundlePath() {
 }
 
 async function ensureWaJsInjected(client) {
-  if (!USE_WAJS_SEND) return false;
-  const page = client?.pupPage;
-  if (!page) throw new Error('WhatsApp browser page is unavailable for WA-JS');
+  const page = client.pupPage;
+  if (!page || page.isClosed()) return false;
 
-  const alreadyReady = await page.evaluate(() => Boolean(window.WPP?.isReady));
-  if (alreadyReady) return true;
+  const isLoaded = await page.evaluate(() => Boolean(window.WPP?.isReady)).catch(() => false);
+  if (isLoaded) {
+    console.log('[WhatsApp] WA-JS is already loaded and ready.');
+    return true;
+  }
 
-  const bundlePath = getWaJsBundlePath();
-  if (!bundlePath) throw new Error('WA-JS browser bundle was not found');
-
-  console.log('[WhatsApp] Injecting WA-JS delivery engine...');
-  await page.addScriptTag({ path: bundlePath });
+  console.log('[WhatsApp] Injecting WA-JS delivery engine from CDN...');
+  await page.addScriptTag({ url: 'https://unpkg.com/@wppconnect/wa-js@latest/dist/wppconnect-wa.js' }).catch(e => {
+    console.warn('[WhatsApp] Could not load WA-JS from CDN:', e.message);
+  });
 
   await page.evaluate(() => {
     if (window.WPP && window.WPP.webpack && typeof window.WPP.webpack.inject === 'function') {
@@ -1358,20 +1359,22 @@ async function executeSendMessage(task) {
 
     // Hack to bypass whatsapp-web.js LID cache bug
     try {
-      await state.client.pupPage.evaluate((targetChatId) => {
+      console.log(`[WhatsApp Queue] Forcing chat open for ${chatId} to establish E2EE keys...`);
+      await state.client.pupPage.evaluate(async (targetChatId) => {
         try {
-          if (window.Store && window.Store.Chat) {
-            const chat = window.Store.Chat.get(targetChatId);
-            if (chat && chat.id && chat.id._serialized && chat.id._serialized.includes('@lid')) {
-              chat.id.server = 'c.us';
-              chat.id.user = targetChatId.split('@')[0];
-              chat.id._serialized = targetChatId;
+          if (window.Store && window.Store.Chat && window.Store.Cmd) {
+            const chatWid = window.Store.WidFactory.createWid(targetChatId);
+            const chat = await window.Store.Chat.find(chatWid);
+            if (chat) {
+              await window.Store.Cmd.openChatAt(chat);
             }
           }
         } catch (e) {}
       }, chatId);
+      // Wait for keys to be exchanged
+      await sleep(1500);
     } catch (e) {
-      console.warn('[WhatsApp Queue] Could not patch LID in browser memory:', e.message);
+      console.warn('[WhatsApp Queue] Could not open chat in UI:', e.message);
     }
 
     const sentMessage = media
