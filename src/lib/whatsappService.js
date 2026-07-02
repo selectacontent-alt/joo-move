@@ -2,7 +2,7 @@ import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 
 import fs from 'fs';
 import path from 'path';
-import { getPuppeteerLaunchOptions } from './puppeteerConfig';
+import { getPuppeteerLaunchOptions, resolveChromiumExecutablePath } from './puppeteerConfig';
 
 const DEFAULT_AUTH_FOLDER = '.wwebjs_auth';
 const DEFAULT_QUEUE_FOLDER = '.wwebjs_queue';
@@ -17,10 +17,11 @@ const QUEUE_MAX_DELAY_MS = Math.max(
 const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 30000);
 const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 4000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
-const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
-const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
 const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
+const CLIENT_DESTROY_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_CLIENT_DESTROY_TIMEOUT_MS', 15000);
+const PAIRING_CODE_INTERVAL_MS = readPositiveIntEnv('WHATSAPP_PAIRING_CODE_INTERVAL_MS', 180000);
+const MAX_LIFECYCLE_TRANSIENT_RETRIES = 1;
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
 const VERIFY_NUMBER_BEFORE_SEND = true;
 const CLOCK_EMOJI = '\u{1F552}';
@@ -28,7 +29,6 @@ const CLOCK_EMOJI = '\u{1F552}';
 if (!global.whatsappState) {
   global.whatsappState = {
     client: null,
-    qrCodeData: null,
     status: 'DISCONNECTED',
     isInitialized: false
   };
@@ -40,17 +40,21 @@ state.isProcessingQueue = Boolean(state.isProcessingQueue);
 state.queueLoaded = Boolean(state.queueLoaded);
 state.queueTimer = state.queueTimer || null;
 state.queueTimerDueAt = state.queueTimerDueAt || 0;
-state.reconnectTimer = state.reconnectTimer || null;
-state.relinkTimer = state.relinkTimer || null;
 state.isRestarting = Boolean(state.isRestarting);
-state.linkingRestartPromise = state.linkingRestartPromise || null;
 state.clientOperationChain = state.clientOperationChain || Promise.resolve();
 state.manualLogout = Boolean(state.manualLogout);
 state.nextInitializeAt = Number.isFinite(Number(state.nextInitializeAt)) ? Number(state.nextInitializeAt) : 0;
 state.lastInitError = state.lastInitError || null;
 state.isRequestingPairingCode = Boolean(state.isRequestingPairingCode);
 state.pairingPhoneNumber = state.pairingPhoneNumber || null;
+state.pairingCode = state.pairingCode || null;
 state.pairingCodeIssuedAt = Number(state.pairingCodeIssuedAt) || 0;
+state.lifecycleChain = state.lifecycleChain || Promise.resolve();
+state.lifecycleGeneration = Number(state.lifecycleGeneration) || 0;
+state.lifecyclePhase = state.lifecyclePhase || 'IDLE';
+state.retryTimer = state.retryTimer || null;
+state.transientRestartCount = Number(state.transientRestartCount) || 0;
+state.browserExecutablePath = state.browserExecutablePath || null;
 
 
 function readPositiveIntEnv(name, fallback) {
@@ -253,37 +257,12 @@ function buildMessageWithTimestamp(message) {
   return `${message}\n\n\u{1F552} ${dateString} - ${timeString}`;
 }
 
-function clearQrState() {
-  // QR state is no longer used, kept for compatibility if any references remain
-}
-
 function clearPairingAttemptState() {
   const state = global.whatsappState;
   state.pairingPhoneNumber = null;
+  state.pairingCode = null;
   state.pairingCodeIssuedAt = 0;
 }
-
-async function waitForPairingClient(timeoutMs = 60000) {
-  const startedAt = Date.now();
-
-  while (Date.now() - startedAt < timeoutMs) {
-    const state = global.whatsappState;
-    if (state.status === 'CONNECTED' || state.status === 'AUTHENTICATED') {
-      throw new Error('WhatsApp is already connected.');
-    }
-    if (state.client && state.status === 'WAITING_FOR_SCAN' && !state.isRestarting) {
-      return state.client;
-    }
-    if (!state.client && !state.isRestarting && !state.isInitialized) {
-      initializeWhatsApp({ force: true });
-    }
-    await sleep(500);
-  }
-
-  throw new Error('WhatsApp linking session did not become ready in time.');
-}
-
-
 
 function scheduleQueue(delayMs = 0) {
   const state = global.whatsappState;
@@ -307,31 +286,6 @@ function scheduleQueue(delayMs = 0) {
       scheduleQueue(5000);
     });
   }, normalizedDelay);
-}
-
-function scheduleReconnect(delayMs = 5000) {
-  const state = global.whatsappState;
-  if (state.isRestarting || state.reconnectTimer) return;
-
-  state.reconnectTimer = setTimeout(() => {
-    state.reconnectTimer = null;
-    try {
-      const waitForCooldown = state.nextInitializeAt ? state.nextInitializeAt - Date.now() : 0;
-      if (waitForCooldown > 0) {
-        scheduleReconnect(waitForCooldown + 250);
-        return;
-      }
-
-      initializeWhatsApp();
-    } catch (error) {
-      console.warn('[WhatsApp] Reconnect failed:', error.message);
-      scheduleReconnect(10000);
-    }
-  }, delayMs);
-
-  if (typeof state.reconnectTimer.unref === 'function') {
-    state.reconnectTimer.unref();
-  }
 }
 
 function clearBrowserLock(authDir, clientId) {
@@ -383,307 +337,313 @@ function clearAuthSession(authDir, clientId) {
 
   try {
     fs.rmSync(sessionDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
-    console.log('[WhatsApp] Cleared failed auth session. A fresh QR will be generated.');
+    console.log('[WhatsApp] Cleared local authentication session.');
   } catch (error) {
     console.warn('[WhatsApp] Could not clear failed auth session:', error.message);
   }
 }
 
-function scheduleFreshLinkingSession(reason, options = {}) {
-  const state = global.whatsappState;
-  const delayMs = Math.max(0, options.delayMs ?? RELINK_RETRY_DELAY_MS);
-  const killBrowser = options.killBrowser === true;
-
-  if (state.relinkTimer) {
-    console.log(`[WhatsApp] Fresh linking session already scheduled. Reason: ${reason}`);
-    return;
+function hasStoredAuthSession() {
+  const sessionDir = path.join(getAuthDir(), `session-${getWhatsappClientId()}`);
+  try {
+    return fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length > 0;
+  } catch {
+    return false;
   }
+}
 
-  if (state.reconnectTimer) {
-    clearTimeout(state.reconnectTimer);
-    state.reconnectTimer = null;
+function maskPhoneNumber(phoneNumber) {
+  const digits = String(phoneNumber || '').replace(/\D/g, '');
+  if (digits.length < 6) return digits;
+  return `${digits.slice(0, 3)}***${digits.slice(-4)}`;
+}
+
+function clearLifecycleTimer() {
+  if (state.retryTimer) {
+    clearTimeout(state.retryTimer);
+    state.retryTimer = null;
   }
+  state.nextInitializeAt = 0;
+}
 
+function runLifecycleOperation(label, operation) {
+  const run = state.lifecycleChain.then(
+    () => operation(),
+    () => operation()
+  );
+  state.lifecycleChain = run.catch((error) => {
+    console.error(`[WhatsApp Lifecycle] ${label} failed:`, getErrorMessage(error));
+  });
+  return run;
+}
+
+function isCurrentClient(client, generation) {
+  return state.client === client && state.lifecycleGeneration === generation;
+}
+
+async function destroyClientLocked({ logout = false, killOnTimeout = true } = {}) {
+  const client = state.client;
   const authDir = getAuthDir();
   const clientId = getWhatsappClientId();
 
-  state.isRestarting = true;
-  state.status = 'DISCONNECTED';
+  state.lifecycleGeneration += 1;
   state.client = null;
   state.isInitialized = false;
   state.clientOperationChain = Promise.resolve();
-  state.lastInitError = reason;
-  clearQrState();
 
-  console.warn(`[WhatsApp] Scheduling fresh QR session in ${Math.round(delayMs / 1000)}s: ${reason}`);
+  if (!client) return;
 
-  state.relinkTimer = setTimeout(async () => {
-    state.relinkTimer = null;
-
-    try {
-      if (killBrowser) {
-        killStuckBrowserForSession(authDir, clientId);
-      }
-      clearAuthSession(authDir, clientId);
-      await sleep(750);
-    } finally {
-      state.isRestarting = false;
-      state.nextInitializeAt = 0;
-      initializeWhatsApp({ force: true });
+  let timedOut = false;
+  let shutdownTimer;
+  try {
+    await Promise.race([
+      (async () => {
+        if (logout) {
+          try {
+            await client.logout();
+          } catch (error) {
+            console.warn('[WhatsApp] Logout request failed; continuing with browser shutdown:', getErrorMessage(error));
+          }
+        }
+        await client.destroy();
+      })(),
+      new Promise((_, reject) => {
+        shutdownTimer = setTimeout(() => {
+        timedOut = true;
+        reject(new Error(`WhatsApp client shutdown timed out after ${CLIENT_DESTROY_TIMEOUT_MS}ms`));
+        }, CLIENT_DESTROY_TIMEOUT_MS);
+      })
+    ]);
+  } catch (error) {
+    console.warn('[WhatsApp] Graceful client shutdown failed:', getErrorMessage(error));
+    if (killOnTimeout && timedOut) {
+      killStuckBrowserForSession(authDir, clientId);
+      clearBrowserLock(authDir, clientId);
     }
+  } finally {
+    if (shutdownTimer) clearTimeout(shutdownTimer);
+  }
+}
+
+function scheduleLifecycleRetryLocked(reason) {
+  if (state.retryTimer || state.transientRestartCount >= MAX_LIFECYCLE_TRANSIENT_RETRIES) {
+    state.status = 'ERROR';
+    state.lifecyclePhase = 'ERROR';
+    return;
+  }
+
+  state.transientRestartCount += 1;
+  const delayMs = RELINK_RETRY_DELAY_MS * state.transientRestartCount;
+  const pairingPhone = state.pairingPhoneNumber;
+  state.status = 'RETRY_WAIT';
+  state.lifecyclePhase = 'RETRY_WAIT';
+  state.nextInitializeAt = Date.now() + delayMs;
+  console.warn(`[WhatsApp] Retrying the same session in ${Math.round(delayMs / 1000)}s: ${reason}`);
+
+  state.retryTimer = setTimeout(() => {
+    state.retryTimer = null;
+    state.nextInitializeAt = 0;
+    runLifecycleOperation('transient retry', async () => {
+      if (state.client) return;
+      await startWhatsAppClientLocked({ pairingPhone });
+    }).catch(() => {});
   }, delayMs);
-
-  if (typeof state.relinkTimer.unref === 'function') {
-    state.relinkTimer.unref();
-  }
+  if (typeof state.retryTimer.unref === 'function') state.retryTimer.unref();
 }
 
-function handleInitializationError(error) {
-  const state = global.whatsappState;
+function handleClientFailure(error, client, generation) {
   const message = getErrorMessage(error);
-  const failedClient = state.client;
+  if (!isCurrentClient(client, generation)) return;
+
   console.error('WhatsApp Init Error:', message);
-  state.status = 'DISCONNECTED';
-  clearQrState();
-  state.isInitialized = false;
-  state.client = null;
-  state.lastInitError = message;
-  const deferClientCleanup = isAuthTimeoutMessage(message) || isTransientBrowserMessage(message);
-
-  if (failedClient && !deferClientCleanup) {
-    failedClient.destroy().catch((destroyError) => {
-      console.warn('[WhatsApp] Error while destroying failed init client:', destroyError.message);
-    });
-  }
-
-  if (isAuthTimeoutMessage(message)) {
-    scheduleFreshLinkingSession('auth timeout while linking', {
-      delayMs: RELINK_RETRY_DELAY_MS,
-      killBrowser: true
-    });
-    return;
-  }
-
-  if (isTransientBrowserMessage(message)) {
-    scheduleFreshLinkingSession(message, {
-      delayMs: RELINK_RETRY_DELAY_MS,
-      killBrowser: true
-    });
-    return;
-  }
-
-  if (message.includes('The browser is already running')) {
-    const authDir = getAuthDir();
-    const clientId = getWhatsappClientId();
-    console.log('[Auto-Fix] Detected stuck WhatsApp browser session. Cleaning locks...');
-    killStuckBrowserForSession(authDir, clientId);
-    clearBrowserLock(authDir, clientId);
-    state.nextInitializeAt = Date.now() + INIT_RETRY_COOLDOWN_MS;
-    scheduleReconnect(INIT_RETRY_COOLDOWN_MS);
-    return;
-  }
-
-  state.nextInitializeAt = Date.now() + INIT_RETRY_COOLDOWN_MS;
-  scheduleReconnect(INIT_RETRY_COOLDOWN_MS);
+  runLifecycleOperation('client failure', async () => {
+    if (!isCurrentClient(client, generation)) return;
+    state.lastInitError = message;
+    await destroyClientLocked();
+    if (isTransientBrowserMessage(message) || isAuthTimeoutMessage(message)) {
+      scheduleLifecycleRetryLocked(message);
+    } else {
+      state.status = 'ERROR';
+      state.lifecyclePhase = 'ERROR';
+    }
+  }).catch(() => {});
 }
 
-export function initializeWhatsApp(options = {}) {
-  const state = global.whatsappState;
-  if (state.isInitialized || state.isRestarting) return;
-
+async function startWhatsAppClientLocked({ pairingPhone = null } = {}) {
   ensureQueueLoaded();
-
-  const force = options.force === true;
-  const now = Date.now();
-  if (!force && state.nextInitializeAt && state.nextInitializeAt > now) {
-    const retryInSeconds = Math.ceil((state.nextInitializeAt - now) / 1000);
-    console.warn(`[WhatsApp] Initialization cooling down. Retrying in ${retryInSeconds}s.`);
+  if (state.client || state.isInitialized) return;
+  if (!pairingPhone && !hasStoredAuthSession()) {
+    state.status = 'DISCONNECTED';
+    state.lifecyclePhase = 'IDLE';
     return;
   }
 
-  state.isInitialized = true;
-  state.status = state.status === 'CONNECTED' ? state.status : 'INITIALIZING';
-  state.nextInitializeAt = 0;
-  state.lastInitError = null;
-  clearQrState();
-  console.log('Initializing WhatsApp Client...');
-
+  clearLifecycleTimer();
   const authDir = getAuthDir();
   const clientId = getWhatsappClientId();
   clearBrowserLock(authDir, clientId);
 
-  state.client = new Client({
-    authStrategy: new LocalAuth({
-      clientId,
-      dataPath: authDir
-    }),
+  let puppeteerOptions;
+  try {
+    puppeteerOptions = getPuppeteerLaunchOptions();
+    state.browserExecutablePath = puppeteerOptions.executablePath;
+  } catch (error) {
+    state.status = 'ERROR';
+    state.lifecyclePhase = 'BROWSER_MISSING';
+    state.lastInitError = getErrorMessage(error);
+    throw error;
+  }
+
+  const generation = state.lifecycleGeneration + 1;
+  state.lifecycleGeneration = generation;
+  state.isInitialized = true;
+  state.isRestarting = false;
+  state.status = 'INITIALIZING';
+  state.lifecyclePhase = pairingPhone ? 'STARTING_PAIRING' : 'RESTORING_SESSION';
+  state.lastInitError = null;
+  state.pairingCode = null;
+  state.pairingCodeIssuedAt = 0;
+
+  console.log(`[WhatsApp Lifecycle ${generation}] Initializing ${pairingPhone ? 'phone pairing' : 'stored session'}...`);
+  const client = new Client({
+    authStrategy: new LocalAuth({ clientId, dataPath: authDir }),
     authTimeoutMs: AUTH_TIMEOUT_MS,
     qrMaxRetries: 0,
     takeoverOnConflict: true,
     takeoverTimeoutMs: 0,
-    puppeteer: getPuppeteerLaunchOptions()
+    ...(pairingPhone ? {
+      pairWithPhoneNumber: {
+        phoneNumber: pairingPhone,
+        showNotification: true,
+        intervalMs: PAIRING_CODE_INTERVAL_MS
+      }
+    } : {}),
+    puppeteer: puppeteerOptions
+  });
+  state.client = client;
+
+  client.on('code', (code) => {
+    if (!isCurrentClient(client, generation)) return;
+    state.status = 'PAIRING';
+    state.lifecyclePhase = 'CODE_READY';
+    state.pairingCode = String(code || '').trim();
+    state.pairingCodeIssuedAt = Date.now();
+    state.lastInitError = null;
+    console.log(`[WhatsApp Lifecycle ${generation}] Pairing code generated.`);
   });
 
-  state.client.on('qr', (qr) => {
-    console.log('WhatsApp is ready for Pairing Code (QR Event Fired)');
-    state.status = 'WAITING_FOR_SCAN';
+  client.on('qr', () => {
+    if (!isCurrentClient(client, generation)) return;
+    const error = new Error('Stored WhatsApp session requires relinking with a phone code.');
+    state.status = 'AUTH_FAILURE';
+    state.lifecyclePhase = 'RELINK_REQUIRED';
+    state.lastInitError = error.message;
+    runLifecycleOperation('reject QR fallback', async () => {
+      if (isCurrentClient(client, generation)) await destroyClientLocked();
+    }).catch(() => {});
+  });
+
+  client.on('authenticated', () => {
+    if (!isCurrentClient(client, generation)) return;
+    console.log(`[WhatsApp Lifecycle ${generation}] Authenticated.`);
+    state.status = 'AUTHENTICATED';
+    state.lifecyclePhase = 'AUTHENTICATED';
     state.lastInitError = null;
   });
 
-  state.client.on('ready', () => {
-    console.log('WhatsApp Client is ready!');
-    clearQrState();
+  client.on('ready', () => {
+    if (!isCurrentClient(client, generation)) return;
+    console.log(`[WhatsApp Lifecycle ${generation}] Client ready.`);
     state.status = 'CONNECTED';
-    state.nextInitializeAt = 0;
+    state.lifecyclePhase = 'CONNECTED';
     state.lastInitError = null;
+    state.transientRestartCount = 0;
     clearPairingAttemptState();
     scheduleQueue();
   });
 
-  state.client.on('authenticated', () => {
-    console.log('WhatsApp AUTHENTICATED');
-    state.status = 'AUTHENTICATED';
+  client.on('auth_failure', (message) => {
+    if (!isCurrentClient(client, generation)) return;
+    console.error(`[WhatsApp Lifecycle ${generation}] Authentication failure:`, message);
+    runLifecycleOperation('authentication failure', async () => {
+      if (!isCurrentClient(client, generation)) return;
+      state.status = 'AUTH_FAILURE';
+      state.lifecyclePhase = 'AUTH_FAILURE';
+      state.lastInitError = String(message || 'WhatsApp authentication failed');
+      await destroyClientLocked();
+      clearAuthSession(authDir, clientId);
+      clearPairingAttemptState();
+    }).catch(() => {});
   });
 
-  state.client.on('auth_failure', (msg) => {
-    console.error('WhatsApp AUTHENTICATION FAILURE', msg);
-    if (state.isRestarting) return;
-
-    state.isRestarting = true;
-    state.status = 'AUTH_FAILURE';
-    clearQrState();
-    state.isInitialized = false;
-    const failedClient = state.client;
-    state.client = null;
-    state.clientOperationChain = Promise.resolve();
-    clearPairingAttemptState();
-
-    (async () => {
-      try {
-        if (failedClient) {
-          await failedClient.destroy();
-        }
-      } catch (error) {
-        console.warn('[WhatsApp] Error while destroying auth-failed client:', error.message);
-      } finally {
-        state.isRestarting = false;
-        scheduleFreshLinkingSession('authentication failure', {
-          delayMs: INIT_RETRY_COOLDOWN_MS,
-          killBrowser: true
-        });
-      }
-    })();
-  });
-
-  state.client.on('disconnected', (reason) => {
-    console.log('WhatsApp Client disconnected:', reason);
-    state.status = 'DISCONNECTED';
-    clearQrState();
-    state.isInitialized = false;
-    state.client = null;
-
-    if (state.manualLogout) {
-      state.manualLogout = false;
-      state.lastInitError = null;
-      return;
-    }
-
-    if (!state.isRestarting) {
-      if (isLogoutDisconnectReason(reason)) {
-        scheduleFreshLinkingSession(`logout during linking: ${reason}`, {
-          delayMs: RELINK_RETRY_DELAY_MS,
-          killBrowser: false
-        });
-      } else {
-        scheduleReconnect(5000);
-      }
-    }
-  });
-
-  if (!state.hasShutdownHooks) {
-    state.hasShutdownHooks = true;
-    process.on('SIGINT', async () => {
-      console.log('\nShutting down WhatsApp gracefully...');
-      if (state.client) {
-        try {
-          await state.client.destroy();
-        } catch (error) {}
-      }
-      process.exit(0);
-    });
-    process.on('SIGTERM', async () => {
-      if (state.client) {
-        try {
-          await state.client.destroy();
-        } catch (error) {}
-      }
-      process.exit(0);
-    });
-    process.on('unhandledRejection', (reason) => {
-      const message = getErrorMessage(reason);
-      if (isAuthTimeoutMessage(message)) {
-        console.warn('[WhatsApp] Captured auth timeout rejection. Restarting linking flow safely.');
-        scheduleFreshLinkingSession('auth timeout rejection', {
-          delayMs: RELINK_RETRY_DELAY_MS,
-          killBrowser: true
-        });
+  client.on('disconnected', (reason) => {
+    if (!isCurrentClient(client, generation)) return;
+    console.warn(`[WhatsApp Lifecycle ${generation}] Disconnected: ${reason}`);
+    runLifecycleOperation('disconnect', async () => {
+      if (!isCurrentClient(client, generation)) return;
+      if (state.manualLogout || isLogoutDisconnectReason(reason)) {
+        await destroyClientLocked({ killOnTimeout: false });
+        state.manualLogout = false;
+        state.status = 'DISCONNECTED';
+        state.lifecyclePhase = 'IDLE';
+        if (isLogoutDisconnectReason(reason)) clearAuthSession(authDir, clientId);
+        clearPairingAttemptState();
         return;
       }
 
-      if (isTransientBrowserMessage(message)) {
-        console.warn('[WhatsApp] Captured transient browser rejection while linking:', message);
-        scheduleFreshLinkingSession(message, {
-          delayMs: RELINK_RETRY_DELAY_MS,
-          killBrowser: true
-        });
-      }
-    });
-  }
+      state.lastInitError = `WhatsApp disconnected: ${reason}`;
+      await destroyClientLocked();
+      scheduleLifecycleRetryLocked(state.lastInitError);
+    }).catch(() => {});
+  });
 
-  state.client.initialize().catch(handleInitializationError);
+  client.initialize().catch((error) => handleClientFailure(error, client, generation));
+}
+
+function registerShutdownHooks() {
+  if (state.hasShutdownHooks) return;
+  state.hasShutdownHooks = true;
+  const shutdown = async (signal) => {
+    console.log('\nShutting down WhatsApp gracefully...');
+    clearLifecycleTimer();
+    try {
+      await destroyClientLocked({ killOnTimeout: true });
+    } catch {}
+    process.exit(signal === 'SIGINT' ? 130 : 0);
+  };
+  process.once('SIGINT', () => shutdown('SIGINT'));
+  process.once('SIGTERM', () => shutdown('SIGTERM'));
+}
+
+export function initializeWhatsApp(options = {}) {
+  registerShutdownHooks();
+  return runLifecycleOperation('initialize', async () => {
+    if (state.client || state.isInitialized) return getCachedStatus();
+    const pairingPhone = options.pairingPhone || state.pairingPhoneNumber || null;
+    await startWhatsAppClientLocked({ pairingPhone });
+    return getCachedStatus();
+  });
 }
 
 export async function getStatus() {
-  const state = global.whatsappState;
-  try {
-    initializeWhatsApp();
-  } catch (error) {
-    console.warn('[WhatsApp] Status requested while initialization failed:', error.message);
-    return {
-      status: state.status || 'DISCONNECTED',
-      qr: null,
-      qrPending: false,
-      qrError: error.message,
-      queuedMessages: state.messageQueue.length,
-      isProcessingQueue: state.isProcessingQueue
-    };
+  if (!state.client && !state.isInitialized && hasStoredAuthSession() && !state.pairingPhoneNumber) {
+    try {
+      await initializeWhatsApp();
+    } catch (error) {
+      console.warn('[WhatsApp] Stored session could not be started:', getErrorMessage(error));
+    }
   }
-
-
-
-  return {
-    status: state.status,
-    qr: null,
-    qrPending: false,
-    qrError: null,
-    lastInitError: state.lastInitError,
-    retryInSeconds: state.nextInitializeAt > Date.now()
-      ? Math.ceil((state.nextInitializeAt - Date.now()) / 1000)
-      : 0,
-    queuedMessages: state.messageQueue.length,
-    isProcessingQueue: state.isProcessingQueue
-  };
+  return getCachedStatus();
 }
 
 export function getCachedStatus() {
   const state = global.whatsappState;
   ensureQueueLoaded();
+  const executablePath = state.browserExecutablePath || resolveChromiumExecutablePath() || null;
 
   return {
     status: state.status || 'DISCONNECTED',
-    qrAvailable: false,
-    qrPending: false,
-    qrError: null,
+    phase: state.lifecyclePhase || 'IDLE',
     lastInitError: state.lastInitError,
     retryInSeconds: state.nextInitializeAt > Date.now()
       ? Math.ceil((state.nextInitializeAt - Date.now()) / 1000)
@@ -691,141 +651,107 @@ export function getCachedStatus() {
     queuedMessages: state.messageQueue.length,
     isProcessingQueue: state.isProcessingQueue,
     isInitialized: state.isInitialized,
-    isRestarting: state.isRestarting
+    isRestarting: Boolean(state.retryTimer) || state.isRestarting,
+    pairing: {
+      code: state.pairingCode || null,
+      phoneMasked: maskPhoneNumber(state.pairingPhoneNumber),
+      issuedAt: state.pairingCodeIssuedAt || null
+    },
+    browser: {
+      ready: Boolean(executablePath),
+      executablePath
+    }
   };
 }
 
 export async function logout() {
-  const state = global.whatsappState;
-  if (state.reconnectTimer) {
-    clearTimeout(state.reconnectTimer);
-    state.reconnectTimer = null;
-  }
-
-  state.manualLogout = true;
-
-  if (state.client) {
-    try {
-      await state.client.logout();
-      state.status = 'DISCONNECTED';
-      clearQrState();
-      state.isInitialized = false;
-      state.client = null;
-    } catch (error) {
-      console.error('Logout Error:', error);
-    }
-  }
-
-  const authDir = getAuthDir();
-  const clientId = getWhatsappClientId();
-  killStuckBrowserForSession(authDir, clientId);
-  clearAuthSession(authDir, clientId);
-  state.status = 'DISCONNECTED';
-  clearQrState();
-  state.isInitialized = false;
-  state.client = null;
-  state.isRequestingPairingCode = false;
-  clearPairingAttemptState();
+  return runLifecycleOperation('logout', async () => {
+    clearLifecycleTimer();
+    state.manualLogout = true;
+    await destroyClientLocked({ logout: true });
+    clearAuthSession(getAuthDir(), getWhatsappClientId());
+    state.manualLogout = false;
+    state.status = 'DISCONNECTED';
+    state.lifecyclePhase = 'IDLE';
+    state.lastInitError = null;
+    state.transientRestartCount = 0;
+    state.isRequestingPairingCode = false;
+    clearPairingAttemptState();
+    return getCachedStatus();
+  });
 }
 
 export async function requestPairingCode(phoneNumber) {
-  const state = global.whatsappState;
   if (state.status === 'CONNECTED' || state.status === 'AUTHENTICATED') {
-    throw new Error('WhatsApp is already connected.');
+    const error = new Error('WhatsApp is already connected.');
+    error.statusCode = 409;
+    throw error;
   }
 
-  let cleanedNumber = String(phoneNumber).replace(/\D/g, '');
-  if (cleanedNumber.startsWith('01') && cleanedNumber.length === 11) {
-    cleanedNumber = '2' + cleanedNumber;
-  }
-  
+  const cleanedNumber = formatEgyptianNumber(phoneNumber);
   if (!cleanedNumber || cleanedNumber.length < 10) {
-    throw new Error('رقم الهاتف غير صحيح، يرجى كتابة الرقم متبوعاً بمفتاح الدولة (مثال: 201012345678)');
+    const error = new Error('رقم الهاتف غير صحيح، اكتب الرقم بمفتاح الدولة مثل 201012345678.');
+    error.statusCode = 400;
+    throw error;
   }
 
-  if (state.isRequestingPairingCode) {
-    throw new Error('جاري طلب الكود بالفعل، يرجى الانتظار...');
-  }
-  
-  state.isRequestingPairingCode = true;
-
-  try {
-    // A pairing-code browser session can remain bound to the first phone number.
-    // Always create a fresh session so switching numbers never reuses stale state.
-    await restartLinkingSession();
-    const pairingClient = await waitForPairingClient();
-
-    let code;
-    try {
-      const codePromise = pairingClient.requestPairingCode(cleanedNumber);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout requesting pairing code')), 15000));
-      code = await Promise.race([codePromise, timeoutPromise]);
-    } catch (apiError) {
-      if (pairingClient && pairingClient.pupPage) {
-        code = await requestPairingCodeSilentFallback(pairingClient, cleanedNumber);
-      } else {
-        throw apiError;
-      }
+  return runLifecycleOperation('phone pairing', async () => {
+    if (['CONNECTED', 'AUTHENTICATED'].includes(state.status)) {
+      const error = new Error('WhatsApp is already connected.');
+      error.statusCode = 409;
+      throw error;
     }
+
+    const sameAttempt = state.pairingPhoneNumber === cleanedNumber
+      && state.client
+      && ['INITIALIZING', 'PAIRING'].includes(state.status);
+    if (sameAttempt) return getCachedStatus();
+
+    state.isRequestingPairingCode = true;
+    clearLifecycleTimer();
+    await destroyClientLocked();
+
+    const switchingNumber = Boolean(state.pairingPhoneNumber && state.pairingPhoneNumber !== cleanedNumber);
+    if (switchingNumber || hasStoredAuthSession()) {
+      clearAuthSession(getAuthDir(), getWhatsappClientId());
+    }
+
     state.pairingPhoneNumber = cleanedNumber;
-    state.pairingCodeIssuedAt = Date.now();
-    return code;
-  } catch (error) {
-    console.error('[WhatsApp] Failed to request pairing code:', error);
-    clearPairingAttemptState();
-    throw new Error(`تعذر إنشاء كود الربط: ${getErrorMessage(error)}`);
-  } finally {
-    state.isRequestingPairingCode = false;
-  }
+    state.pairingCode = null;
+    state.pairingCodeIssuedAt = 0;
+    state.transientRestartCount = 0;
+    state.status = 'INITIALIZING';
+    state.lifecyclePhase = 'STARTING_PAIRING';
+    try {
+      await startWhatsAppClientLocked({ pairingPhone: cleanedNumber });
+      return getCachedStatus();
+    } finally {
+      state.isRequestingPairingCode = false;
+    }
+  });
 }
 
 export async function restartLinkingSession() {
-  const state = global.whatsappState;
-  if (state.linkingRestartPromise) {
-    return state.linkingRestartPromise;
-  }
-
-  state.linkingRestartPromise = (async () => {
+  return runLifecycleOperation('restart', async () => {
     ensureQueueLoaded();
-
-    if (state.reconnectTimer) {
-      clearTimeout(state.reconnectTimer);
-      state.reconnectTimer = null;
-    }
-
-    const authDir = getAuthDir();
-    const clientId = getWhatsappClientId();
-    const existingClient = state.client;
-
+    clearLifecycleTimer();
     state.isRestarting = true;
-    state.manualLogout = false;
-    state.client = null;
-    state.status = 'DISCONNECTED';
-    clearQrState();
-    state.isInitialized = false;
-    state.clientOperationChain = Promise.resolve();
-    clearPairingAttemptState();
-
     try {
-      if (existingClient) {
-        await existingClient.destroy();
+      const pairingPhone = state.pairingPhoneNumber;
+      await destroyClientLocked();
+      state.transientRestartCount = 0;
+      state.lastInitError = null;
+      if (pairingPhone || hasStoredAuthSession()) {
+        await startWhatsAppClientLocked({ pairingPhone });
+      } else {
+        state.status = 'DISCONNECTED';
+        state.lifecyclePhase = 'IDLE';
       }
-    } catch (error) {
-      console.warn('[WhatsApp] Error while restarting linking session:', error.message);
+      return getCachedStatus();
+    } finally {
+      state.isRestarting = false;
     }
-
-    killStuckBrowserForSession(authDir, clientId);
-    clearAuthSession(authDir, clientId);
-    await sleep(1500);
-    state.isRestarting = false;
-    state.nextInitializeAt = 0;
-    initializeWhatsApp({ force: true });
-    return getStatus();
-  })().finally(() => {
-    state.linkingRestartPromise = null;
   });
-
-  return state.linkingRestartPromise;
 }
 
 function formatEgyptianNumber(number) {
@@ -930,26 +856,8 @@ function getRetryDelayMs(attempts) {
 }
 
 async function restartWhatsAppClient(reason) {
-  const state = global.whatsappState;
-  if (state.isRestarting) return;
-
-  state.isRestarting = true;
   console.warn(`[WhatsApp] Restarting client after transient error: ${reason}`);
-
-  try {
-    if (state.client) {
-      await state.client.destroy();
-    }
-  } catch (error) {
-    console.warn('[WhatsApp] Error while destroying unstable client:', error.message);
-  } finally {
-    state.client = null;
-    state.status = 'DISCONNECTED';
-    state.isInitialized = false;
-    state.isRestarting = false;
-    state.clientOperationChain = Promise.resolve();
-    scheduleReconnect(3000);
-  }
+  await restartLinkingSession();
 }
 
 async function processQueue() {
@@ -1260,11 +1168,9 @@ function enqueueMessage(number, message, mediaUrl = null, waitForDelivery = fals
   ensureQueueLoaded();
 
   if (startClient) {
-    try {
-      initializeWhatsApp();
-    } catch (error) {
+    initializeWhatsApp().catch((error) => {
       console.warn('[WhatsApp Queue] Message will stay queued; client initialization failed:', error.message);
-    }
+    });
   }
 
   const task = {
@@ -1319,71 +1225,3 @@ export async function queueInvoiceMessage(number, message, invoicePayload) {
 export async function sendMessage(number, message, mediaUrl = null) {
   return enqueueMessage(number, message, mediaUrl, true);
 }
-
-async function requestPairingCodeSilentFallback(client, phoneNumber) {
-  const page = client.pupPage;
-  if (!page) throw new Error('Page not ready for fallback');
-
-  // Wait for the Link button to render
-  await page.waitForFunction(() => {
-    const elements = Array.from(document.querySelectorAll('span, div, button'));
-    return elements.some(b => b.innerText && (b.innerText.includes('Link with phone') || b.innerText.includes('ربط برقم هاتف')));
-  }, { timeout: 15000 }).catch(() => {});
-
-  const clickedLink = await page.evaluate(() => {
-    const elements = Array.from(document.querySelectorAll('span, div, button'));
-    const linkBtn = elements.find(b => b.innerText && (b.innerText.includes('Link with phone') || b.innerText.includes('ربط برقم هاتف')) && b.innerText.length < 50);
-    if (linkBtn) {
-      linkBtn.click();
-      return true;
-    }
-    return false;
-  });
-
-  if (!clickedLink) throw new Error('Could not find link button');
-
-  await page.waitForFunction(() => {
-    const inputs = Array.from(document.querySelectorAll('input'));
-    return inputs.some(el => el.type === 'text' || el.type === 'tel');
-  }, { timeout: 10000 });
-
-  const inputSelector = await page.evaluate(() => {
-    const inputs = Array.from(document.querySelectorAll('input'));
-    const phoneInput = inputs.find(el => el.type === 'text' || el.type === 'tel');
-    if (phoneInput) {
-      phoneInput.id = 'wa-fallback-phone-input';
-      return '#wa-fallback-phone-input';
-    }
-    return null;
-  });
-
-  if (inputSelector) {
-    await page.focus(inputSelector);
-    await page.keyboard.down('Control');
-    await page.keyboard.press('A');
-    await page.keyboard.up('Control');
-    await page.keyboard.press('Backspace');
-    await page.type(inputSelector, phoneNumber, { delay: 50 });
-  }
-
-  await page.evaluate(() => {
-    const btns = Array.from(document.querySelectorAll('div[role="button"]'));
-    const nextBtn = btns.find(b => b.innerText === 'Next' || b.innerText === 'التالي');
-    if (nextBtn) nextBtn.click();
-  });
-
-  return await page.waitForFunction(() => {
-    const container = document.querySelector('div[data-testid="pairing-code-container"]');
-    if (container) {
-      const code = container.innerText.replace(/[^A-Za-z0-9]/g, '');
-      if (code.length === 8) return code;
-    }
-    const cells = document.querySelectorAll('div[data-testid="pairing-code-cell"]');
-    if (cells && cells.length === 8) {
-      const code = Array.from(cells).map(c => c.innerText).join('').replace(/[^A-Za-z0-9]/g, '');
-      if (code.length === 8) return code;
-    }
-    return null;
-  }, { timeout: 60000 });
-}
-

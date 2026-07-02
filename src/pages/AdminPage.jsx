@@ -355,11 +355,11 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
   const testimonialFileInputRef = useRef(null);
 
   // WhatsApp state
-  const [waStatus, setWaStatus] = useState('INITIALIZING');
-  const [waQr, setWaQr] = useState(null);
+  const [waStatus, setWaStatus] = useState('DISCONNECTED');
+  const [waPhase, setWaPhase] = useState('IDLE');
   const [waQueuedMessages, setWaQueuedMessages] = useState(0);
-  const [waQrError, setWaQrError] = useState(null);
-  const [waQrPending, setWaQrPending] = useState(false);
+  const [waLastError, setWaLastError] = useState(null);
+  const [waBrowserReady, setWaBrowserReady] = useState(false);
 
   const [waPairingPhone, setWaPairingPhone] = useState('');
   const [waPairingCode, setWaPairingCode] = useState('');
@@ -379,7 +379,9 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to request code');
-      setWaPairingCode(data.code);
+      setWaStatus(data.status || 'INITIALIZING');
+      setWaPhase(data.phase || 'STARTING_PAIRING');
+      if (data.pairing?.code) setWaPairingCode(data.pairing.code);
     } catch (err) {
       setWaPairingError(err.message);
     } finally {
@@ -394,24 +396,23 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
           const res = await fetch('/api/whatsapp/status');
           if (!res.ok) {
             setWaStatus('ERROR_NO_BACKEND');
-            setWaQrPending(false);
             return;
           }
           const data = await res.json();
           const nextStatus = data.status || 'DISCONNECTED';
-          const nextQrPending = Boolean(data.qrPending);
           setWaStatus(nextStatus);
-          setWaQrPending(nextQrPending);
-          if (data.qr) {
-            setWaQr(data.qr);
-          } else if (!['WAITING_FOR_SCAN', 'INITIALIZING', 'AUTHENTICATED'].includes(nextStatus)) {
-            setWaQr(null);
+          setWaPhase(data.phase || 'IDLE');
+          setWaBrowserReady(Boolean(data.browser?.ready));
+          setWaLastError(data.lastInitError || null);
+          if (data.pairing?.code) setWaPairingCode(data.pairing.code);
+          if (nextStatus === 'CONNECTED') {
+            setWaPairingCode('');
+            setWaPairingError('');
           }
-          setWaQrError(nextQrPending ? null : (data.qrError || data.lastInitError || null));
           setWaQueuedMessages(Number(data.queuedMessages) || 0);
         } catch (e) {
           setWaStatus('ERROR_NO_BACKEND');
-          setWaQrPending(false);
+          setWaLastError(e.message);
         }
       };
       fetchWaStatus();
@@ -422,23 +423,20 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
 
   const handleWaRestart = async () => {
     setWaStatus('INITIALIZING');
-    setWaQrError(null);
-    setWaQrPending(true);
+    setWaLastError(null);
     try {
       const res = await fetch('/api/whatsapp/restart', { method: 'POST' });
       const data = await res.json();
       if (res.ok) {
         setWaStatus(data.status || 'INITIALIZING');
-        if (data.qr) setWaQr(data.qr);
-        setWaQrPending(Boolean(data.qrPending));
+        setWaPhase(data.phase || 'RESTORING_SESSION');
+        if (data.pairing?.code) setWaPairingCode(data.pairing.code);
         setWaQueuedMessages(Number(data.queuedMessages) || 0);
       } else {
-        setWaQrPending(false);
-        setWaQrError(data.error || 'Failed to refresh QR');
+        setWaLastError(data.error || 'Failed to restart WhatsApp');
       }
     } catch (error) {
-      setWaQrPending(false);
-      setWaQrError(error.message);
+      setWaLastError(error.message);
     }
   };
 
@@ -446,8 +444,8 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
     if (window.confirm(t('admin.confirmWaLogout'))) {
       await fetch('/api/whatsapp/logout', { method: 'POST' });
       setWaStatus('DISCONNECTED');
-      setWaQr(null);
-      setWaQrPending(false);
+      setWaPhase('IDLE');
+      setWaPairingCode('');
       setWaQueuedMessages(0);
     }
   };
@@ -3532,28 +3530,10 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                     <div style={{ padding: '2rem', background: '#dcfce7', borderRadius: '15px', border: '1px solid #bbf7d0', color: '#166534', fontWeight: 'bold' }}>
                       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: '1rem' }}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                       <p style={{ fontSize: '1.2rem' }}>{t('admin.waConnected')}</p>
-                      <button onClick={handleWaLogout} className="btn-admin" style={{ marginTop: '1rem', background: '#ef4444', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem' }}>{t('admin.waLogout')}</button>
-                    </div>
-                  ) : waStatus === 'WAITING_FOR_SCAN' ? (
-                    <div style={{ padding: '2rem', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
-                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.2rem', textAlign: 'center' }}>ربط الواتساب (مطلوب مسح الباركود)</p>
-                      
-                      {/* QR Code Only */}
-                      {waQr ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '1rem', paddingBottom: '1rem' }}>
-                          <p style={{ color: '#ef4444', fontSize: '1.1rem', marginBottom: '1rem', fontWeight: 'bold', background: '#fef2f2', padding: '1rem', borderRadius: '10px', textAlign: 'center' }}>
-                            تنبيه: تم إيقاف الربط برقم الهاتف نهائياً بسبب أعطال من شركة واتساب نفسها.<br />
-                            <strong>يجب استخدام كاميرا الموبايل لمسح هذا الباركود!</strong>
-                          </p>
-                          <p style={{ color: '#334155', fontSize: '1rem', marginBottom: '1.5rem', textAlign: 'center' }}>
-                            افتح الواتساب على موبايلك &gt; الأجهزة المرتبطة &gt; ربط بجهاز &gt; وجه الكاميرا للمربع الأسفل:
-                          </p>
-                          <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(waQr)}&size=300x300&margin=10`} alt="WhatsApp QR Code" style={{ width: '300px', height: '300px', border: '3px solid #10b981', borderRadius: '15px', padding: '10px', background: '#fff', boxShadow: '0 10px 25px rgba(16, 185, 129, 0.2)' }} />
-                          <button onClick={handleWaRestart} style={{ marginTop: '1.5rem', background: '#64748b', color: 'white', padding: '0.5rem 1rem', borderRadius: '8px', border: 'none', cursor: 'pointer' }}>تحديث الباركود لو مش شغال</button>
-                        </div>
-                      ) : (
-                         <div style={{ textAlign: 'center', padding: '2rem', color: '#64748b' }}>جاري تحميل الباركود، يرجى الانتظار...</div>
-                      )}
+                      <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap', marginTop: '1rem' }}>
+                        <button onClick={handleWaRestart} className="btn-admin" style={{ background: '#0f172a', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem' }}>إعادة التشغيل</button>
+                        <button onClick={handleWaLogout} className="btn-admin" style={{ background: '#ef4444', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem' }}>{t('admin.waLogout')}</button>
+                      </div>
                     </div>
                   ) : waStatus === 'ERROR_NO_BACKEND' ? (
                     <div style={{ padding: '2rem', background: '#fef2f2', borderRadius: '15px', border: '1px solid #fecaca', color: '#ef4444', fontWeight: 'bold' }}>
@@ -3561,28 +3541,27 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                       <p style={{ fontSize: '0.9rem' }}>{t('admin.waNoBackendDesc')}</p>
                     </div>
                   ) : (
-                    <div style={{ padding: '2rem', background: '#fffbeb', borderRadius: '15px', border: '1px solid #fde68a', color: '#b45309', fontWeight: 'bold' }}>
-                      <p style={{ fontSize: '1.2rem', marginBottom: '0.5rem' }}>{t('admin.waInitializing')}</p>
-                      <p style={{ fontSize: '0.9rem' }}>{t('admin.waWaitQr', { status: waStatus })}</p>
-                    </div>
+                    <form onSubmit={handleRequestPairingCode} style={{ width: 'min(100%, 460px)', padding: '2rem', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0', display: 'grid', gap: '1rem' }}>
+                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', fontSize: '1.2rem' }}>ربط واتساب بكود الهاتف</p>
+                      <p style={{ color: '#64748b', fontSize: '0.9rem' }}>الحالة: {waStatus} — المرحلة: {waPhase} — Chromium: {waBrowserReady ? 'جاهز' : 'غير موجود'}</p>
+                      <input dir="ltr" inputMode="tel" value={waPairingPhone} onChange={(event) => setWaPairingPhone(event.target.value)} placeholder="201012345678" style={{ width: '100%', minHeight: '48px', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0 1rem', fontWeight: 800 }} />
+                      <button type="submit" disabled={waPairingLoading || ['INITIALIZING', 'PAIRING', 'RETRY_WAIT'].includes(waStatus) || !waPairingPhone.trim()} className="btn-admin" style={{ border: 'none', padding: '0.85rem 1.5rem' }}>
+                        {waPairingLoading || ['INITIALIZING', 'RETRY_WAIT'].includes(waStatus) ? 'جارٍ تجهيز الكود...' : 'إنشاء كود الربط'}
+                      </button>
+                      {waPairingCode && <div style={{ padding: '1rem', borderRadius: '12px', color: '#fff', background: '#075277' }}><small>واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف</small><strong dir="ltr" style={{ display: 'block', margin: '0.7rem 0', color: '#7ce4c0', fontSize: '2rem', letterSpacing: '0.22em' }}>{waPairingCode}</strong><small>الكود يتجدد تلقائيًا عند الحاجة</small></div>}
+                      {waPairingError && <p style={{ color: '#b91c1c', fontSize: '0.9rem' }}>{waPairingError}</p>}
+                      <button type="button" onClick={handleWaRestart} disabled={waPairingLoading} style={{ border: 0, background: 'transparent', color: '#334155', cursor: 'pointer', fontWeight: 800 }}>إعادة محاولة التشغيل</button>
+                    </form>
                   )}
                 </div>
                 <div style={{ width: '100%', maxWidth: '420px', padding: '1rem 1.2rem', borderRadius: '14px', background: '#f8fafc', border: '1px solid #e2e8f0', color: '#334155', fontWeight: 900 }}>
                   الرسائل المحفوظة في الطابور: <span style={{ color: 'var(--primary-color)' }}>{waQueuedMessages}</span>
                 </div>
-                {waQrError && (
+                {waLastError && (
                   <p style={{ marginTop: '0.8rem', color: '#b45309', fontWeight: 800, fontSize: '0.9rem' }}>
-                    جاري التجهيز... {waQrError}
+                    آخر خطأ: {waLastError}
                   </p>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { handleWaRestart(); setWaPairingCode(''); setWaPairingPhone(''); }}
-                  className="btn-admin"
-                  style={{ marginTop: '1rem', background: '#0f172a', color: '#fff', border: 'none', padding: '0.85rem 1.5rem' }}
-                >
-                  إعادة تهيئة التسجيل
-                </button>
               </div>
 
               <form onSubmit={handleSaveSettings} className="admin-panel">

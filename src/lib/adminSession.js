@@ -36,6 +36,13 @@ export function getAdminSession(request) {
   }
 }
 
+export function canAccessAdminPage(request, pageId) {
+  const session = getAdminSession(request);
+  if (!session) return false;
+  if (session.role === 'admin') return true;
+  return parseAdminPermissions(session.permissions).includes(pageId);
+}
+
 export const adminSessionCookie = {
   name: COOKIE_NAME,
   options: {

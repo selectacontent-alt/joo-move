@@ -142,9 +142,12 @@ function WhatsAppAdmin({ settings, reload }) {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'تعذر فحص واتساب');
       setStatus(result);
-      if (['CONNECTED', 'AUTHENTICATED'].includes(result.status)) {
+      if (result.pairing?.code) setPairingCode(result.pairing.code);
+      if (result.status === 'CONNECTED') {
         setPairingCode('');
         setPairingError('');
+      } else if (result.status === 'ERROR' || result.status === 'AUTH_FAILURE') {
+        setPairingError(result.lastInitError || 'تعذر تشغيل جلسة واتساب');
       }
     } catch (error) {
       setStatus({ status: 'ERROR', lastInitError: error.message });
@@ -194,9 +197,10 @@ function WhatsAppAdmin({ settings, reload }) {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phoneNumber: pairingPhone })
       });
       const result = await response.json();
-      if (!response.ok || !result.code) throw new Error(result.error || 'تعذر إنشاء كود الربط');
-      setPairingCode(result.code);
-      await refreshStatus();
+      if (!response.ok) throw new Error(result.error || 'تعذر بدء إنشاء كود الربط');
+      setStatus(result);
+      if (result.pairing?.code) setPairingCode(result.pairing.code);
+      window.setTimeout(refreshStatus, 750);
     } catch (error) {
       setPairingError(error.message);
     } finally {
@@ -235,8 +239,23 @@ function WhatsAppAdmin({ settings, reload }) {
   };
 
   const statusCode = status?.status || 'DISCONNECTED';
-  const connected = ['CONNECTED', 'AUTHENTICATED'].includes(statusCode);
-  const statusTitle = loading ? 'جارٍ فحص الاتصال...' : connected ? 'واتساب متصل والإشعارات تعمل' : statusCode === 'INITIALIZING' ? 'جارٍ تشغيل واتساب...' : 'واتساب غير متصل';
+  const connected = statusCode === 'CONNECTED';
+  const pairingInProgress = ['INITIALIZING', 'PAIRING', 'RETRY_WAIT'].includes(statusCode);
+  const statusTitle = loading
+    ? 'جارٍ فحص الاتصال...'
+    : connected
+      ? 'واتساب متصل والإشعارات تعمل'
+      : statusCode === 'AUTHENTICATED'
+        ? 'تمت المصادقة وجارٍ إتمام الاتصال...'
+      : statusCode === 'PAIRING'
+        ? 'كود الربط جاهز'
+        : statusCode === 'RETRY_WAIT'
+          ? `إعادة المحاولة خلال ${status?.retryInSeconds || 0} ث`
+          : statusCode === 'INITIALIZING'
+            ? 'جارٍ تجهيز كود الهاتف...'
+            : statusCode === 'ERROR' || statusCode === 'AUTH_FAILURE'
+              ? 'تعذر تشغيل واتساب'
+              : 'واتساب غير متصل';
 
   return <div className="jma-stack">
     <div className="jma-page-title"><div><span>WHATSAPP OPERATIONS</span><h2>واتساب ورسائل نقل الأثاث</h2><p>اربط الرقم مرة واحدة، وبعدها تُرسل الطلبات وتحديثات الحالات من قائمة الانتظار تلقائيًا.</p></div><button className="jma-btn primary" onClick={saveTemplates} disabled={saving}><Save />{saving ? 'جارٍ الحفظ...' : 'حفظ كل الرسائل'}</button></div>
@@ -246,9 +265,9 @@ function WhatsAppAdmin({ settings, reload }) {
         <h3>{statusTitle}</h3>
         <p>{connected ? 'طلبات نقل الأثاث وتحديثات الحالات تُرسل تلقائيًا.' : 'أدخل رقم واتساب الذي سيُرسل الإشعارات ثم اربطه بكود الهاتف.'}</p>
         <div className="jma-wa-metrics"><b>{Number(status?.queuedMessages || 0)}</b><small>رسالة في الانتظار</small></div>
-        {connected ? <div className="jma-wa-actions"><button className="jma-btn ghost" onClick={restartConnection} disabled={pairingLoading}><RefreshCw />إعادة التشغيل</button><button className="jma-btn danger" onClick={logoutConnection} disabled={pairingLoading}><LogOut />فصل واتساب</button></div> : <form className="jma-wa-pairing" onSubmit={requestPairingCode}><label><span>رقم واتساب بمفتاح الدولة</span><input dir="ltr" inputMode="tel" value={pairingPhone} onChange={(e) => setPairingPhone(e.target.value)} placeholder="201012345678" /></label><button className="jma-btn primary" disabled={pairingLoading || !pairingPhone.trim()}>{pairingLoading ? 'جارٍ إنشاء الكود...' : 'إنشاء كود الربط'}</button>{pairingCode && <div className="jma-pairing-code"><small>من الهاتف: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف</small><b dir="ltr">{pairingCode}</b><em>أدخل هذا الكود داخل واتساب</em></div>}{pairingError && <div className="jma-wa-error">{pairingError}</div>}<button type="button" className="jma-link" onClick={restartConnection} disabled={pairingLoading}><RefreshCw />إعادة تهيئة جلسة الربط</button></form>}
+        {connected ? <div className="jma-wa-actions"><button className="jma-btn ghost" onClick={restartConnection} disabled={pairingLoading}><RefreshCw />إعادة التشغيل</button><button className="jma-btn danger" onClick={logoutConnection} disabled={pairingLoading}><LogOut />فصل واتساب</button></div> : <form className="jma-wa-pairing" onSubmit={requestPairingCode}><label><span>رقم واتساب بمفتاح الدولة</span><input dir="ltr" inputMode="tel" value={pairingPhone} onChange={(e) => setPairingPhone(e.target.value)} placeholder="201012345678" /></label><button className="jma-btn primary" disabled={pairingLoading || pairingInProgress || !pairingPhone.trim()}>{pairingLoading || pairingInProgress ? 'جارٍ تجهيز الكود...' : 'إنشاء كود الربط'}</button>{pairingCode && <div className="jma-pairing-code"><small>من الهاتف: واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف</small><b dir="ltr">{pairingCode}</b><em>أدخل هذا الكود داخل واتساب — يتجدد تلقائيًا عند الحاجة</em></div>}{pairingError && <div className="jma-wa-error">{pairingError}</div>}<button type="button" className="jma-link" onClick={restartConnection} disabled={pairingLoading}><RefreshCw />إعادة محاولة التشغيل</button></form>}
       </section>
-      <section className="jma-panel"><h3>بيانات الإرسال</h3><div className="jma-info-list"><div><span>حالة الخدمة</span><b>{statusCode}</b></div><div><span>رقم خدمة العملاء</span><bdi>{settings.support_whatsapp || 'غير محدد'}</bdi></div><div><span>رقم الإدارة</span><bdi>{settings.admin_whatsapp || 'غير محدد'}</bdi></div><div><span>رسالة العميل الجديدة</span><b>تشمل بيانات النموذج كاملة</b></div><div><span>رسالة الإدارة</span><b>تشمل روابط الصور والفيديو</b></div>{status?.lastInitError && <div><span>آخر خطأ</span><b>{status.lastInitError}</b></div>}</div></section>
+      <section className="jma-panel"><h3>بيانات الإرسال</h3><div className="jma-info-list"><div><span>حالة الخدمة</span><b>{statusCode}</b></div><div><span>مرحلة التشغيل</span><b>{status?.phase || 'IDLE'}</b></div><div><span>Chromium</span><b>{status?.browser?.ready ? 'جاهز' : 'غير موجود'}</b></div>{status?.pairing?.phoneMasked && <div><span>رقم الربط</span><bdi>{status.pairing.phoneMasked}</bdi></div>}<div><span>رقم خدمة العملاء</span><bdi>{settings.support_whatsapp || 'غير محدد'}</bdi></div><div><span>رقم الإدارة</span><bdi>{settings.admin_whatsapp || 'غير محدد'}</bdi></div><div><span>رسالة العميل الجديدة</span><b>تشمل بيانات النموذج كاملة</b></div><div><span>رسالة الإدارة</span><b>تشمل روابط الصور والفيديو</b></div>{status?.lastInitError && <div><span>آخر خطأ</span><b>{status.lastInitError}</b></div>}</div></section>
     </div>
     <section className="jma-panel"><div className="jma-panel-head"><div><h3>رسالة الطلب الجديد</h3><p>يمكن استخدام حقول مثل {'{request_number}'} و{'{customer_name}'} و{'{services}'} و{'{media_links}'}.</p></div></div><div className="jma-form-grid"><label className="wide"><span>الرسالة التي تصل للعميل</span><textarea rows="18" value={form.wa_template_move_request_customer || ''} onChange={(e) => setForm({ ...form, wa_template_move_request_customer: e.target.value })} /></label><label className="wide"><span>الرسالة التي تصل للإدارة</span><textarea rows="18" value={form.wa_template_move_request_admin || ''} onChange={(e) => setForm({ ...form, wa_template_move_request_admin: e.target.value })} /></label></div></section>
     <section className="jma-panel"><div className="jma-panel-head"><div><h3>رسائل مراحل نقل الأثاث</h3><p>تُرسل تلقائيًا للعميل عند تغيير حالة الطلب من لوحة الإدارة.</p></div></div><div className="jma-form-grid">{MOVE_STATUSES.map((item) => { const key = `wa_template_move_status_${item.value}`; return <label key={item.value}><span><i style={{ background: STATUS_COLOR[item.value] }} />{item.ar}</span><textarea value={form[key] || ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} /></label>; })}</div></section>

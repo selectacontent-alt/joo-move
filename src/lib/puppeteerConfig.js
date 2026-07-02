@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { execFileSync } from 'child_process';
 
 const CHROMIUM_COMMANDS = process.platform === 'win32'
   ? ['chrome.exe', 'msedge.exe']
@@ -20,6 +21,7 @@ const COMMON_CHROMIUM_PATHS = process.platform === 'win32'
 
 let cachedExecutablePath;
 let hasResolvedExecutablePath = false;
+let hasLoggedExecutable = false;
 
 function readPositiveIntEnv(name, fallback) {
   const value = Number(process.env[name]);
@@ -68,9 +70,37 @@ export function resolveChromiumExecutablePath() {
   return cachedExecutablePath;
 }
 
+export function requireChromiumExecutablePath() {
+  const executablePath = resolveChromiumExecutablePath();
+  if (!executablePath) {
+    throw new Error('Chromium was not found. Install chromium and make it available on PATH before starting WhatsApp.');
+  }
+
+  try {
+    fs.accessSync(executablePath, process.platform === 'win32' ? fs.constants.F_OK : fs.constants.X_OK);
+  } catch {
+    throw new Error(`Chromium is not executable: ${executablePath}`);
+  }
+
+  if (!hasLoggedExecutable) {
+    hasLoggedExecutable = true;
+    let version = 'version unavailable';
+    try {
+      version = execFileSync(executablePath, ['--version'], {
+        encoding: 'utf8',
+        timeout: 5000,
+        windowsHide: true
+      }).trim() || version;
+    } catch {}
+    console.log(`[WhatsApp] Chromium ready: ${executablePath} (${version})`);
+  }
+
+  return executablePath;
+}
+
 
 export function getPuppeteerLaunchOptions(extraArgs = []) {
-  const executablePath = resolveChromiumExecutablePath();
+  const executablePath = requireChromiumExecutablePath();
   const protocolTimeout = readPositiveIntEnv('PUPPETEER_PROTOCOL_TIMEOUT_MS', 900000);
   const args = [
     '--no-sandbox',
@@ -91,7 +121,7 @@ export function getPuppeteerLaunchOptions(extraArgs = []) {
     headless: true,
     protocolTimeout,
     timeout: protocolTimeout,
-    ...(executablePath ? { executablePath } : {}),
+    executablePath,
     args: [...new Set(args)]
   };
 }
