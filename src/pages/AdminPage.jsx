@@ -3542,7 +3542,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                       {waQr && (
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px dashed #cbd5e1' }}>
                           <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '1rem' }}><strong>الطريقة الأولى (موصى بها):</strong> افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز، ثم امسح الكود التالي بالكاميرا:</p>
-                          <img src={waQr} alt="WhatsApp QR Code" style={{ width: '250px', height: '250px', border: '2px solid var(--primary-color)', borderRadius: '15px', padding: '10px', background: '#fff' }} />
+                          <img src={`https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(waQr)}&size=250x250`} alt="WhatsApp QR Code" style={{ width: '250px', height: '250px', border: '2px solid var(--primary-color)', borderRadius: '15px', padding: '10px', background: '#fff' }} />
                         </div>
                       )}
 
