@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart3, Bell, Boxes, CalendarDays, Check, ChevronLeft, CircleGauge, Clock3,
   FileText, GalleryHorizontal, Globe2, GripVertical, Headphones, ImagePlus, LayoutGrid,
@@ -37,7 +37,7 @@ const TABS = [
   ['dashboard', CircleGauge, 'نظرة عامة'], ['requests', Truck, 'طلبات النقل'], ['schedule', CalendarDays, 'جدول التشغيل'],
   ['services', PackageCheck, 'الخدمات'], ['areas', MapPin, 'مناطق الخدمة'], ['customers', UsersRound, 'العملاء'],
   ['work', GalleryHorizontal, 'معرض الأعمال'], ['reviews', Star, 'آراء العملاء'], ['messages', MessageCircle, 'الرسائل'],
-  ['content', LayoutGrid, 'محتوى الموقع'], ['whatsapp', Phone, 'واتساب والقوالب'], ['settings', Settings, 'الإعدادات والتكاملات']
+  ['content', LayoutGrid, 'محتوى الموقع'], ['whatsapp', Phone, 'واتساب والقوالب'], ['about_agency', Headphones, 'حول S C Marketing'], ['settings', Settings, 'الإعدادات والتكاملات']
 ];
 
 function StatCard({ icon: Icon, label, value, hint, color }) {
@@ -254,19 +254,138 @@ function WhatsAppAdmin({ settings, reload }) {
   </div>;
 }
 
+function AboutAgency() {
+  return <div className="jma-stack">
+    <div className="jma-page-title"><div><span>ABOUT THE DEVELOPER</span><h2>حول S C Marketing</h2><p>الشريك الرقمي المسؤول عن تصميم وتطوير تجربة Joo Move.</p></div></div>
+    <section className="jma-about-agency-hero">
+      <img src="/s-logo.png" alt="S C Marketing" />
+      <div><span>منذ 2018</span><h2>حلول رقمية تبني نشاطك وتكبره</h2><p>مؤسسة رقمية متكاملة متخصصة في التسويق الإلكتروني، تصميم الهويات التجارية، حلول الويب والبرمجة والاستضافة، مع تطوير مستمر يساعد الشركات على الانتشار وتحقيق أهدافها.</p></div>
+    </section>
+    <div className="jma-about-agency-cards">
+      <article><span><Headphones /></span><h3>متابعة احترافية</h3><p>متابعة دائمة، حلول عملية واقتراحات تساعد نشاطك التجاري على التطور.</p></article>
+      <article><span><BarChart3 /></span><h3>أكثر من 15,000 حملة</h3><p>خبرة في تحسين الحملات والوصول للعملاء بخطط تناسب كل نشاط.</p></article>
+      <article><span><Star /></span><h3>خبرة أكثر من 9 سنوات</h3><p>فريق متخصص يجمع التخطيط والإبداع والتنفيذ والمتابعة في مكان واحد.</p></article>
+    </div>
+    <section className="jma-about-agency-why"><span>لماذا S C Marketing؟</span><h2>لأن الموقع القوي لازم يساعدك تحقق هدفك</h2><p>نبدأ بفهم نشاطك وأهدافك، ثم نبني خطة واضحة وننفذها بمحتوى أصلي وتصميم جذاب وحلول تقنية حديثة. المتابعة لا تنتهي عند التسليم؛ نستمر في القياس والتطوير وتنفيذ الملاحظات.</p></section>
+    <section className="jma-about-agency-contact">
+      <a href="tel:01013100178"><Phone /><span><small>اتصل بنا</small><bdi>01013100178</bdi></span></a>
+      <a href="mailto:info@selectcustomersmarketing.com"><MessageCircle /><span><small>راسلنا</small><b>info@selectcustomersmarketing.com</b></span></a>
+      <div><MapPin /><span><small>العنوان</small><b>شارع 15 مايو أمام كنتاكي، شبرا الخيمة، القاهرة</b></span></div>
+    </section>
+  </div>;
+}
+
 export default function JooAdmin({ navigate }) {
   const [auth, setAuth] = useState(null); const [active, setActive] = useState('dashboard'); const [sidebar, setSidebar] = useState(false);
   const [data, setData] = useState({ requests: [], services: [], areas: [], media: [], reviews: [], messages: [], settings: {} }); const [loading, setLoading] = useState(false);
-  useEffect(() => { try { setAuth(JSON.parse(localStorage.getItem('joo_admin_auth') || 'null')); } catch {} }, []);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [seenRequestId, setSeenRequestId] = useState(0);
+  const latestRequestIdRef = useRef(null);
+  const notificationRef = useRef(null);
+  const audioContextRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      setAuth(JSON.parse(localStorage.getItem('joo_admin_auth') || 'null'));
+      setSeenRequestId(Number(localStorage.getItem('joo_admin_seen_request_id') || 0));
+    } catch {}
+  }, []);
+
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') audioContextRef.current = new AudioContext();
+      const context = audioContextRef.current;
+      const play = () => {
+        const now = context.currentTime;
+        [[880, 0], [1175, 0.16]].forEach(([frequency, delay]) => {
+          const oscillator = context.createOscillator();
+          const gain = context.createGain();
+          oscillator.type = 'sine'; oscillator.frequency.value = frequency;
+          gain.gain.setValueAtTime(0.0001, now + delay);
+          gain.gain.exponentialRampToValueAtTime(0.22, now + delay + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.22);
+          oscillator.connect(gain); gain.connect(context.destination);
+          oscillator.start(now + delay); oscillator.stop(now + delay + 0.24);
+        });
+      };
+      if (context.state === 'suspended') context.resume().then(play).catch(() => {}); else play();
+    } catch (error) {
+      console.warn('[Admin Notifications] Sound could not be played:', error.message);
+    }
+  };
+
+  useEffect(() => {
+    const unlockSound = () => {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContext) return;
+        if (!audioContextRef.current) audioContextRef.current = new AudioContext();
+        if (audioContextRef.current.state === 'suspended') audioContextRef.current.resume().catch(() => {});
+      } catch {}
+    };
+    document.addEventListener('pointerdown', unlockSound, { once: true });
+    document.addEventListener('keydown', unlockSound, { once: true });
+    return () => {
+      document.removeEventListener('pointerdown', unlockSound);
+      document.removeEventListener('keydown', unlockSound);
+    };
+  }, []);
+
   const load = async () => {
     if (!auth) return; setLoading(true);
     const endpoints = ['/api/move-requests', '/api/services?all=true', '/api/service-areas?all=true', '/api/media', '/api/testimonials', '/api/contact', '/api/settings'];
-    const results = await Promise.all(endpoints.map((url) => fetch(url).then(async (response) => ({ response, value: response.ok ? await response.json() : [] })).catch(() => ({ response: null, value: [] }))));
+    const results = await Promise.all(endpoints.map((url) => fetch(url, { cache: 'no-store' }).then(async (response) => ({ response, value: response.ok ? await response.json() : [] })).catch(() => ({ response: null, value: [] }))));
     if (results[0].response?.status === 401) { localStorage.removeItem('joo_admin_auth'); setAuth(null); setLoading(false); return; }
-    setData({ requests: results[0].value || [], services: results[1].value || [], areas: results[2].value || [], media: results[3].value || [], reviews: results[4].value || [], messages: results[5].value || [], settings: results[6].value || {} }); setLoading(false);
+    const requests = results[0].value || [];
+    latestRequestIdRef.current = requests.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+    setData({ requests, services: results[1].value || [], areas: results[2].value || [], media: results[3].value || [], reviews: results[4].value || [], messages: results[5].value || [], settings: results[6].value || {} }); setLoading(false);
   };
   useEffect(() => { load(); }, [auth]);
+
+  useEffect(() => {
+    if (!auth) return undefined;
+    let cancelled = false;
+    const pollRequests = async () => {
+      try {
+        const response = await fetch('/api/move-requests', { cache: 'no-store' });
+        if (response.status === 401) { localStorage.removeItem('joo_admin_auth'); setAuth(null); return; }
+        if (!response.ok) return;
+        const requests = await response.json();
+        if (cancelled || !Array.isArray(requests)) return;
+        const latestId = requests.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+        const previousLatestId = latestRequestIdRef.current;
+        latestRequestIdRef.current = latestId;
+        setData((current) => ({ ...current, requests }));
+        if (previousLatestId !== null && latestId > previousLatestId) playNotificationSound();
+      } catch (error) {
+        console.warn('[Admin Notifications] Request polling failed:', error.message);
+      }
+    };
+    const timer = window.setInterval(pollRequests, 10000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [auth]);
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (!notificationRef.current?.contains(event.target)) setNotificationsOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick);
+  }, [notificationsOpen]);
+
   if (!auth) return <AdminLogin onLogin={setAuth} />;
+  const latestRequestId = data.requests.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0);
+  const unreadCount = data.requests.filter((item) => Number(item.id) > seenRequestId).length;
+  const markNotificationsRead = () => {
+    setSeenRequestId(latestRequestId);
+    localStorage.setItem('joo_admin_seen_request_id', String(latestRequestId));
+  };
+  const openRequestsFromNotifications = () => {
+    markNotificationsRead(); setNotificationsOpen(false); setActive('requests');
+  };
   const logout = () => { localStorage.removeItem('joo_admin_auth'); setAuth(null); };
   const render = () => {
     if (active === 'dashboard') return <Dashboard requests={data.requests} setActive={setActive} />;
@@ -280,8 +399,9 @@ export default function JooAdmin({ navigate }) {
     if (active === 'messages') return <MessagesAdmin messages={data.messages} reload={load} />;
     if (active === 'content') return <ContentAdmin />;
     if (active === 'whatsapp') return <WhatsAppAdmin settings={data.settings} reload={load} />;
+    if (active === 'about_agency') return <AboutAgency />;
     if (active === 'settings') return <SettingsAdmin settings={data.settings} reload={load} />;
     return null;
   };
-  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/s-logo.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>Joo Move Admin</small></div></div><nav>{TABS.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{TABS.find(([id]) => id === active)?.[2]}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button><button className="jma-notify"><Bell /><em>{data.requests.filter((r) => r.status === 'received').length}</em></button><span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
+  return <div className="jma-app"><aside className={`jma-sidebar ${sidebar ? 'open' : ''}`}><div className="jma-sidebar-brand"><img src="/s-logo.png" alt="Joo Move" /><button onClick={() => setSidebar(false)}><X /></button></div><div className="jma-user"><span>{auth.username?.charAt(0).toUpperCase()}</span><div><b>{auth.username}</b><small>Joo Move Admin</small></div></div><nav>{TABS.map(([id, Icon, label]) => <button className={active === id ? 'active' : ''} key={id} onClick={() => { setActive(id); setSidebar(false); }}><Icon /><span>{label}</span>{id === 'requests' && data.requests.filter((r) => r.status === 'received').length > 0 && <em>{data.requests.filter((r) => r.status === 'received').length}</em>}</button>)}</nav><div className="jma-sidebar-footer"><button onClick={() => navigate('/')}><Globe2 />عرض الموقع</button><button onClick={logout}><LogOut />تسجيل الخروج</button></div></aside><main className="jma-main"><header className="jma-topbar"><button className="jma-sidebar-toggle" onClick={() => setSidebar(true)}><Menu /></button><div><span>{TABS.find(([id]) => id === active)?.[2]}</span><small>{new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' })}</small></div><div><button onClick={load} className={loading ? 'spin' : ''}><RefreshCw /></button><div className="jma-notification-wrap" ref={notificationRef}><button className={`jma-notify ${unreadCount ? 'has-unread' : ''}`} onClick={() => setNotificationsOpen((open) => !open)} aria-label="إشعارات الطلبات"><Bell />{unreadCount > 0 && <em>{unreadCount > 99 ? '99+' : unreadCount}</em>}</button>{notificationsOpen && <section className="jma-notification-menu"><header><div><b>إشعارات الطلبات</b><small>{unreadCount ? `${unreadCount} طلب غير مقروء` : 'لا توجد طلبات جديدة'}</small></div>{unreadCount > 0 && <button onClick={markNotificationsRead}><Check />قراءة الكل</button>}</header><div>{data.requests.slice(0, 6).map((request) => <button className={Number(request.id) > seenRequestId ? 'unread' : ''} key={request.id} onClick={openRequestsFromNotifications}><span>{request.customer_name?.charAt(0) || <Truck />}</span><div><b>طلب نقل جديد من {request.customer_name}</b><small>{request.request_number} • {request.origin_area} ← {request.destination_area}</small><time>{new Date(request.created_at).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}</time></div></button>)}{!data.requests.length && <p><Bell />أول طلب جديد هيظهر هنا.</p>}</div><footer><button onClick={openRequestsFromNotifications}>عرض كل طلبات النقل<ChevronLeft /></button></footer></section>}</div><span className="jma-top-avatar">{auth.username?.charAt(0).toUpperCase()}</span></div></header><div className="jma-content">{render()}</div></main></div>;
 }

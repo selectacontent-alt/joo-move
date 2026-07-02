@@ -17,6 +17,7 @@ const QUEUE_MAX_DELAY_MS = Math.max(
 const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 90000);
 const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
 const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 10000);
+const MESSAGE_ACK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_MESSAGE_ACK_TIMEOUT_MS', 15000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
 const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
@@ -36,6 +37,76 @@ const MESSAGE_ACK_LABELS = {
 
 function getMessageId(message) {
   return message?.id?._serialized || message?.id?.id || 'unknown';
+}
+
+async function getPhoneChatId(client, formatted, numberId) {
+  const fallbackChatId = `${formatted}@c.us`;
+  const resolvedChatId = numberId?._serialized || fallbackChatId;
+
+  if (!resolvedChatId.endsWith('@lid')) return resolvedChatId;
+
+  try {
+    const mappings = await withTimeout(
+      () => client.getContactLidAndPhone([resolvedChatId]),
+      NUMBER_LOOKUP_TIMEOUT_MS,
+      `WhatsApp LID mapping for ${formatted}`,
+      { skipClientRestart: true }
+    );
+    const phoneChatId = mappings?.[0]?.pn;
+    const mappedDigits = String(phoneChatId || '').replace(/\D/g, '');
+
+    if (phoneChatId && mappedDigits === formatted) {
+      console.log(`[WhatsApp Queue] Resolved internal LID ${resolvedChatId} to phone chat ${phoneChatId}.`);
+      return phoneChatId;
+    }
+
+    console.warn(`[WhatsApp Queue] LID ${resolvedChatId} did not return the expected phone chat. Using ${fallbackChatId}.`);
+  } catch (error) {
+    console.warn(`[WhatsApp Queue] Could not map LID ${resolvedChatId} to a phone chat. Using ${fallbackChatId}:`, error.message);
+  }
+
+  return fallbackChatId;
+}
+
+function waitForMessageAck(client, sentMessage) {
+  const messageId = getMessageId(sentMessage);
+  const initialAck = Number.isInteger(sentMessage?.ack) ? sentMessage.ack : 0;
+
+  if (initialAck === -1) {
+    const error = new Error(`WhatsApp rejected message ${messageId} immediately (ACK -1)`);
+    error.isPermanent = true;
+    return Promise.reject(error);
+  }
+
+  if (initialAck >= 1) return Promise.resolve(initialAck);
+
+  return new Promise((resolve, reject) => {
+    let timer;
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      client.removeListener('message_ack', handleAck);
+    };
+    const handleAck = (message, ack) => {
+      if (getMessageId(message) !== messageId) return;
+      if (ack === -1) {
+        cleanup();
+        const error = new Error(`WhatsApp rejected message ${messageId} (ACK -1)`);
+        error.isPermanent = true;
+        reject(error);
+        return;
+      }
+      if (ack >= 1) {
+        cleanup();
+        resolve(ack);
+      }
+    };
+
+    client.on('message_ack', handleAck);
+    timer = setTimeout(() => {
+      cleanup();
+      resolve(0);
+    }, MESSAGE_ACK_TIMEOUT_MS);
+  });
 }
 
 if (!global.whatsappState) {
@@ -1116,7 +1187,7 @@ async function executeSendMessage(task) {
         throw error;
       }
 
-      chatId = numberId._serialized || chatId;
+      chatId = await getPhoneChatId(state.client, formatted, numberId);
     } else {
       console.log(`[WhatsApp Queue] Sending directly to ${chatId}; number lookup is disabled for faster delivery.`);
     }
@@ -1155,15 +1226,26 @@ async function executeSendMessage(task) {
         media = await MessageMedia.fromUrl(mediaUrl);
       }
 
-      sentMessage = await state.client.sendMessage(chatId, media, { caption: task.message });
+      sentMessage = await state.client.sendMessage(chatId, media, { caption: task.message, waitUntilMsgSent: true });
     } else {
-      sentMessage = await state.client.sendMessage(chatId, task.message);
+      sentMessage = await state.client.sendMessage(chatId, task.message, { waitUntilMsgSent: true });
     }
 
     const messageId = getMessageId(sentMessage);
-    const ack = Number.isInteger(sentMessage?.ack) ? sentMessage.ack : 0;
+    if (!sentMessage || messageId === 'unknown') {
+      const error = new Error(`WhatsApp did not return a message after sending to ${chatId}`);
+      error.isPermanent = true;
+      throw error;
+    }
+
+    console.log(`[WhatsApp Queue] Message ${messageId} queued locally for ${chatId}; waiting for WhatsApp ACK...`);
+    const ack = await waitForMessageAck(state.client, sentMessage);
     const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
-    console.log(`[WhatsApp Queue] Accepted by WhatsApp for ${chatId}. Message ID: ${messageId}. ACK: ${ack} (${ackLabel})`);
+    if (ack >= 1) {
+      console.log(`[WhatsApp Queue] Confirmed by WhatsApp for ${chatId}. Message ID: ${messageId}. ACK: ${ack} (${ackLabel})`);
+    } else {
+      console.warn(`[WhatsApp Queue] Message ${messageId} is still pending after ${MESSAGE_ACK_TIMEOUT_MS / 1000}s; it was not marked as delivered.`);
+    }
     return { sent: true, messageId, ack };
   });
 }
