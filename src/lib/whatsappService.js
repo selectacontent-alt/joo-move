@@ -1104,6 +1104,18 @@ async function executeSendMessage(task) {
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
 
+    try {
+      // Warm up the connection to prevent silent E2EE failures (ACK -1)
+      const contact = await state.client.getContactById(chatId);
+      const chat = await contact.getChat();
+      await chat.sendStateTyping();
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      await chat.clearState();
+    } catch (warmupError) {
+      console.log('[WhatsApp Queue] Warmup skipped (contact might be new):', warmupError.message);
+    }
+
+    let sentMessage;
     if (mediaUrl) {
       let media;
       if (mediaUrl.startsWith('http')) {
@@ -1114,12 +1126,21 @@ async function executeSendMessage(task) {
         media = await MessageMedia.fromUrl(mediaUrl);
       }
 
-      await state.client.sendMessage(chatId, media, { caption: task.message });
+      sentMessage = await state.client.sendMessage(chatId, media, { caption: task.message });
     } else {
-      await state.client.sendMessage(chatId, task.message);
+      sentMessage = await state.client.sendMessage(chatId, task.message);
     }
 
-    console.log(`[WhatsApp Queue] Sent successfully to ${chatId}`);
+    if (sentMessage && sentMessage.id) {
+       console.log(`[WhatsApp Queue] Sent successfully to ${chatId} (ID: ${sentMessage.id._serialized})`);
+       if (sentMessage.ack === -1) {
+           console.warn(`[WhatsApp Queue] WARNING: Message was instantly rejected by WhatsApp (ACK -1). The number might require manual messaging first.`);
+           throw new Error('WhatsApp rejected the message (ACK -1)');
+       }
+    } else {
+       console.log(`[WhatsApp Queue] Sent successfully to ${chatId}`);
+    }
+
     return true;
   });
 }
