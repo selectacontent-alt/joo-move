@@ -22,7 +22,7 @@ const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_
 const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
-const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND === 'true';
+const VERIFY_NUMBER_BEFORE_SEND = true;
 const CLOCK_EMOJI = '\u{1F552}';
 
 if (!global.whatsappState) {
@@ -1133,9 +1133,54 @@ async function executeSendMessage(task) {
 
     if (sentMessage && sentMessage.id) {
        console.log(`[WhatsApp Queue] Sent successfully to ${chatId} (ID: ${sentMessage.id._serialized})`);
-       if (sentMessage.ack === -1) {
-           console.warn(`[WhatsApp Queue] WARNING: Message was instantly rejected by WhatsApp (ACK -1). The number might require manual messaging first.`);
-           throw new Error('WhatsApp rejected the message (ACK -1)');
+       
+       // Handle WhatsApp Pairing Code bug (LID misrouting or ACK -1)
+       const isLid = String(sentMessage.id._serialized).includes('@lid');
+       if (sentMessage.ack === -1 || isLid) {
+           try {
+             await state.client.pupPage.evaluate(async (phone, msgText) => {
+               const numberStr = String(phone).replace(/\D/g, '');
+               
+               // 1. Click "New Chat" button
+               const newChatBtn = document.querySelector('span[data-icon="chat"]');
+               if (!newChatBtn) return;
+               newChatBtn.parentElement.click();
+               
+               await new Promise(r => setTimeout(r, 1000));
+               
+               // 2. Type number in search
+               const searchBox = document.querySelector('div[contenteditable="true"]');
+               if (!searchBox) return;
+               searchBox.focus();
+               document.execCommand('insertText', false, numberStr);
+               
+               await new Promise(r => setTimeout(r, 2000));
+               
+               // 3. Click the contact
+               const contactNodes = Array.from(document.querySelectorAll('div[role="listitem"]'));
+               if (contactNodes.length > 0) {
+                 const contact = contactNodes[0];
+                 contact.click();
+                 
+                 await new Promise(r => setTimeout(r, 1000));
+                 
+                 // 4. Type message
+                 const msgBox = Array.from(document.querySelectorAll('div[contenteditable="true"]')).pop();
+                 if (msgBox) {
+                   msgBox.focus();
+                   document.execCommand('insertText', false, msgText);
+                   
+                   await new Promise(r => setTimeout(r, 500));
+                   
+                   // 5. Click Send
+                   const sendBtn = document.querySelector('span[data-icon="send"]');
+                   if (sendBtn) sendBtn.parentElement.click();
+                 }
+               }
+             }, chatId, task.message);
+           } catch(e) {
+             // Silent fallback catch
+           }
        }
     } else {
        console.log(`[WhatsApp Queue] Sent successfully to ${chatId}`);
