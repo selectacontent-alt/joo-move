@@ -7,228 +7,23 @@ import { getPuppeteerLaunchOptions } from './puppeteerConfig';
 const DEFAULT_AUTH_FOLDER = '.wwebjs_auth';
 const DEFAULT_QUEUE_FOLDER = '.wwebjs_queue';
 const QUEUE_FILE_NAME = 'messages.json';
-const DEFAULT_CLIENT_ID = 'joo-move-client';
+const DEFAULT_CLIENT_ID = 'al-rehab-client';
 
 const QUEUE_MIN_DELAY_MS = readPositiveIntEnv('WHATSAPP_QUEUE_MIN_DELAY_MS', 5000);
 const QUEUE_MAX_DELAY_MS = Math.max(
   QUEUE_MIN_DELAY_MS,
   readPositiveIntEnv('WHATSAPP_QUEUE_MAX_DELAY_MS', 10000)
 );
-const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 90000);
-const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
-const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 10000);
-const MESSAGE_ACK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_MESSAGE_ACK_TIMEOUT_MS', 15000);
-const WAJS_INJECT_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_WAJS_INJECT_TIMEOUT_MS', 15000);
+const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS', 30000);
+const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 4000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
 const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
 const AUTH_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_AUTH_TIMEOUT_MS', 900000);
 const RELINK_RETRY_DELAY_MS = readPositiveIntEnv('WHATSAPP_RELINK_RETRY_DELAY_MS', 5000);
 const MAX_TRANSIENT_RETRIES = readNonNegativeIntEnv('WHATSAPP_MAX_TRANSIENT_RETRIES', 0);
-const VERIFY_NUMBER_BEFORE_SEND = false;
-const USE_WAJS_SEND = process.env.WHATSAPP_USE_WAJS_SEND !== 'false';
+const VERIFY_NUMBER_BEFORE_SEND = process.env.WHATSAPP_VERIFY_NUMBER_BEFORE_SEND === 'true';
 const CLOCK_EMOJI = '\u{1F552}';
-const MESSAGE_ACK_LABELS = {
-  [-1]: 'error',
-  0: 'pending',
-  1: 'received-by-server',
-  2: 'delivered-to-device',
-  3: 'read',
-  4: 'played'
-};
-
-function getMessageId(message) {
-  return typeof message?.id === 'string' ? message.id : (message?.id?._serialized || message?.id?.id || 'unknown');
-}
-
-function getWaJsBundlePath() {
-  const candidates = [
-    process.env.WHATSAPP_WAJS_BUNDLE_PATH,
-    path.join(process.cwd(), 'node_modules', '@wppconnect', 'wa-js', 'dist', 'wppconnect-wa.js'),
-    path.join(process.cwd(), '.wajs', 'wppconnect-wa.js')
-  ].filter(Boolean);
-  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
-}
-
-async function ensureWaJsInjected(client) {
-  const page = client.pupPage;
-  if (!page || page.isClosed()) return false;
-
-  const isLoaded = await page.evaluate(() => Boolean(window.WPP?.isReady)).catch(() => false);
-  if (isLoaded) {
-    console.log('[WhatsApp] WA-JS is already loaded and ready.');
-    return true;
-  }
-
-  console.log('[WhatsApp] Injecting WA-JS delivery engine via Node Fetch (bypassing CSP and Webpack)...');
-  try {
-    let content = global.whatsappWaJsCache;
-    if (!content) {
-      const res = await fetch('https://unpkg.com/@wppconnect/wa-js@latest/dist/wppconnect-wa.js');
-      if (res.ok) {
-        content = await res.text();
-        global.whatsappWaJsCache = content;
-      } else {
-        throw new Error(`CDN HTTP Error: ${res.status}`);
-      }
-    }
-    if (content) {
-      await page.evaluate((scriptContent) => {
-        const script = document.createElement('script');
-        script.type = 'text/javascript';
-        script.text = scriptContent;
-        document.head.appendChild(script);
-      }, content);
-    }
-  } catch (e) {
-    console.warn('[WhatsApp] Could not fetch/inject WA-JS script:', e.message);
-  }
-
-  await page.evaluate(() => {
-    if (window.WPP && window.WPP.webpack && typeof window.WPP.webpack.inject === 'function') {
-      window.WPP.webpack.inject();
-    }
-  }).catch(() => {});
-
-  await page.waitForFunction(() => Boolean(window.WPP?.isReady), { timeout: 60000 });
-  console.log('[WhatsApp] WA-JS delivery engine is ready.');
-  return true;
-}
-
-async function sendMessageWithWaJs(client, chatId, message, media = null) {
-  const page = client.pupPage;
-  return page.evaluate(async ({ recipient, text, attachment }) => {
-    if (!window.WPP?.isReady) throw new Error('WA-JS is not ready inside WhatsApp Web');
-
-    let result;
-    if (attachment) {
-      result = await window.WPP.chat.sendFileMessage(
-        recipient,
-        `data:${attachment.mimetype};base64,${attachment.data}`,
-        {
-          type: attachment.type,
-          caption: text,
-          filename: attachment.filename || undefined,
-          mimetype: attachment.mimetype,
-          waitForAck: true,
-          markIsRead: false
-        }
-      );
-    } else {
-      result = await window.WPP.chat.sendTextMessage(recipient, text, {
-        waitForAck: true,
-        markIsRead: false
-      });
-    }
-
-    return {
-      id: typeof result?.id === 'string' ? result.id : result?.id?._serialized,
-      ack: Number(result?.ack ?? 0),
-      from: result?.from?._serialized || result?.from,
-      to: result?.to?._serialized || result?.to || recipient
-    };
-  }, {
-    recipient: chatId,
-    text: message,
-    attachment: media ? {
-      data: media.data,
-      mimetype: media.mimetype || 'application/octet-stream',
-      filename: media.filename || null,
-      type: String(media.mimetype || '').startsWith('image/') ? 'image'
-        : String(media.mimetype || '').startsWith('video/') ? 'video'
-          : String(media.mimetype || '').startsWith('audio/') ? 'audio'
-            : 'document'
-    } : null
-  });
-}
-
-async function getPhoneChatId(client, formatted, numberId) {
-  const fallbackChatId = `${formatted}@c.us`;
-  const resolvedChatId = numberId?._serialized || fallbackChatId;
-
-  if (!resolvedChatId.endsWith('@lid')) return resolvedChatId;
-
-  try {
-    const mappings = await withTimeout(
-      () => client.getContactLidAndPhone([resolvedChatId]),
-      NUMBER_LOOKUP_TIMEOUT_MS,
-      `WhatsApp LID mapping for ${formatted}`,
-      { skipClientRestart: true }
-    );
-    const phoneChatId = mappings?.[0]?.pn;
-    const mappedDigits = String(phoneChatId || '').replace(/\D/g, '');
-
-    if (phoneChatId && mappedDigits === formatted) {
-      console.log(`[WhatsApp Queue] Resolved internal LID ${resolvedChatId} to phone chat ${phoneChatId}.`);
-      return phoneChatId;
-    }
-
-    console.warn(`[WhatsApp Queue] LID ${resolvedChatId} did not return the expected phone chat. Using ${fallbackChatId}.`);
-  } catch (error) {
-    console.warn(`[WhatsApp Queue] Could not map LID ${resolvedChatId} to a phone chat. Using ${fallbackChatId}:`, error.message);
-  }
-
-  return fallbackChatId;
-}
-
-function waitForMessageAck(client, sentMessage) {
-  const messageId = getMessageId(sentMessage);
-  
-  if (String(messageId).startsWith('UI_')) {
-    return Promise.resolve(1);
-  }
-
-  const initialAck = Number.isInteger(sentMessage?.ack) ? sentMessage.ack : 0;
-
-  // ACK -1 on a @lid chatId is a transient routing issue, not a permanent failure.
-  // We mark it transient so the queue retries using the @c.us chatId.
-  const isLidMessage = String(messageId).includes('@lid');
-
-  if (initialAck === -1) {
-    const error = new Error(`WhatsApp rejected message ${messageId} immediately (ACK -1)`);
-    if (isLidMessage) {
-      error.isTransient = true;
-    } else {
-      error.isPermanent = true;
-    }
-    return Promise.reject(error);
-  }
-
-  if (initialAck >= 1) return Promise.resolve(initialAck);
-
-  return new Promise((resolve, reject) => {
-    let timer;
-    const cleanup = () => {
-      if (timer) clearTimeout(timer);
-      client.removeListener('message_ack', handleAck);
-    };
-    const handleAck = (message, ack) => {
-      if (getMessageId(message) !== messageId) return;
-      if (ack === -1) {
-        cleanup();
-        const rejId = getMessageId(message);
-        const error = new Error(`WhatsApp rejected message ${rejId} (ACK -1)`);
-        if (String(rejId).includes('@lid')) {
-          error.isTransient = true;
-        } else {
-          error.isPermanent = true;
-        }
-        reject(error);
-        return;
-      }
-      if (ack >= 1) {
-        cleanup();
-        resolve(ack);
-      }
-    };
-
-    client.on('message_ack', handleAck);
-    timer = setTimeout(() => {
-      cleanup();
-      resolve(0);
-    }, MESSAGE_ACK_TIMEOUT_MS);
-  });
-}
 
 if (!global.whatsappState) {
   global.whatsappState = {
@@ -256,7 +51,6 @@ state.lastInitError = state.lastInitError || null;
 state.isRequestingPairingCode = Boolean(state.isRequestingPairingCode);
 state.pairingPhoneNumber = state.pairingPhoneNumber || null;
 state.pairingCodeIssuedAt = Number(state.pairingCodeIssuedAt) || 0;
-state.waJsReady = Boolean(state.waJsReady);
 
 
 function readPositiveIntEnv(name, fallback) {
@@ -693,25 +487,8 @@ function handleInitializationError(error) {
   scheduleReconnect(INIT_RETRY_COOLDOWN_MS);
 }
 
-export async function initializeWhatsApp(options = {}) {
+export function initializeWhatsApp(options = {}) {
   const state = global.whatsappState;
-
-  // Auto-wipe the corrupted LID session once on the host server
-  try {
-    const flagFile = path.join(process.cwd(), '.session_wiped');
-    if (!fs.existsSync(flagFile)) {
-      console.log('[WhatsApp] Performing one-time session wipe to clear corrupted LID cache...');
-      const wipeAuthDir = getAuthDir();
-      if (fs.existsSync(wipeAuthDir)) {
-        fs.rmSync(wipeAuthDir, { recursive: true, force: true });
-      }
-      fs.writeFileSync(flagFile, 'wiped');
-      console.log('[WhatsApp] One-time session wipe completed successfully.');
-    }
-  } catch (e) {
-    console.warn('[WhatsApp] Could not perform one-time session wipe:', e.message);
-  }
-
   if (state.isInitialized || state.isRestarting) return;
 
   ensureQueueLoaded();
@@ -753,15 +530,9 @@ export async function initializeWhatsApp(options = {}) {
     state.lastInitError = null;
   });
 
-  state.client.on('ready', async () => {
+  state.client.on('ready', () => {
     console.log('WhatsApp Client is ready!');
     clearQrState();
-    try {
-      state.waJsReady = await ensureWaJsInjected(state.client);
-    } catch (error) {
-      state.waJsReady = false;
-      console.error('[WhatsApp] WA-JS delivery engine could not be loaded; using the legacy sender:', error.message);
-    }
     state.status = 'CONNECTED';
     state.nextInitializeAt = 0;
     state.lastInitError = null;
@@ -772,12 +543,6 @@ export async function initializeWhatsApp(options = {}) {
   state.client.on('authenticated', () => {
     console.log('WhatsApp AUTHENTICATED');
     state.status = 'AUTHENTICATED';
-  });
-
-  state.client.on('message_ack', (message, ack) => {
-    const recipient = message?.to || message?.id?.remote || 'unknown';
-    const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
-    console.log(`[WhatsApp ACK] Message ${getMessageId(message)} to ${recipient}: ${ack} (${ackLabel})`);
   });
 
   state.client.on('auth_failure', (msg) => {
@@ -813,7 +578,6 @@ export async function initializeWhatsApp(options = {}) {
   state.client.on('disconnected', (reason) => {
     console.log('WhatsApp Client disconnected:', reason);
     state.status = 'DISCONNECTED';
-    state.waJsReady = false;
     clearQrState();
     state.isInitialized = false;
     state.client = null;
@@ -986,148 +750,25 @@ export async function requestPairingCode(phoneNumber) {
   state.isRequestingPairingCode = true;
 
   try {
+    // A pairing-code browser session can remain bound to the first phone number.
+    // Always create a fresh session so switching numbers never reuses stale state.
     await restartLinkingSession();
     const pairingClient = await waitForPairingClient();
 
-    let code;
-    try {
-      console.log('[WhatsApp] Attempting native requestPairingCode API...');
-      const codePromise = pairingClient.requestPairingCode(cleanedNumber);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout requesting pairing code via API')), 45000));
-      code = await Promise.race([codePromise, timeoutPromise]);
-    } catch (apiError) {
-      console.warn(`[WhatsApp] Native API failed (${apiError.message}). Falling back to UI Automation for Pairing Code...`);
-      code = await requestPairingCodeViaUI(pairingClient, cleanedNumber);
-    }
-
-    if (!code) {
-      throw new Error('لم يتم إرجاع أي كود.');
-    }
-
+    const codePromise = pairingClient.requestPairingCode(cleanedNumber);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout requesting pairing code')), 60000));
+    
+    const code = await Promise.race([codePromise, timeoutPromise]);
     state.pairingPhoneNumber = cleanedNumber;
     state.pairingCodeIssuedAt = Date.now();
     return code;
   } catch (error) {
-    console.error('[WhatsApp] Failed to request pairing code completely:', error);
+    console.error('[WhatsApp] Failed to request pairing code:', error);
     clearPairingAttemptState();
     throw new Error(`تعذر إنشاء كود الربط: ${getErrorMessage(error)}`);
   } finally {
     state.isRequestingPairingCode = false;
   }
-}
-
-/**
- * Fallback to generate pairing code by physically interacting with the DOM
- * Bypasses WhatsApp Web API changes and t: t errors.
- */
-async function requestPairingCodeViaUI(client, phoneNumber) {
-  const page = client.pupPage;
-  if (!page) throw new Error("Browser page not found for UI automation.");
-
-  // 1. Click "Link with phone number"
-  await page.evaluate(async () => {
-    const findLinkButton = () => {
-      const els = Array.from(document.querySelectorAll('span, div, button'));
-      return els.find(el => {
-        const text = el.innerText || '';
-        return text.includes('Link with phone number') || text.includes('الربط برقم') || text.includes('Link with phone');
-      });
-    };
-    
-    let btn = findLinkButton();
-    if (!btn) {
-      await new Promise(r => setTimeout(r, 2000));
-      btn = findLinkButton();
-    }
-    
-    if (btn) {
-      btn.click();
-    } else {
-      throw new Error("Link with phone number button not found on screen.");
-    }
-  });
-
-  // 2. Wait for the phone number input
-  // WhatsApp web pairing screen uses a single input or a split input.
-  // We'll wait a moment for the transition
-  await new Promise(r => setTimeout(r, 2000));
-  
-  // 3. Find input and type number
-  await page.evaluate(async (num) => {
-    // Find editable inputs. Usually there is an input for phone number.
-    const inputs = Array.from(document.querySelectorAll('input[type="text"]'));
-    // The phone number input is usually the last one, or the one with text direction ltr
-    const phoneInput = inputs.length > 1 ? inputs[inputs.length - 1] : inputs[0];
-    
-    if (!phoneInput) throw new Error("Phone number input not found.");
-    
-    // Clear existing
-    phoneInput.value = '';
-    
-    // Sometimes WA Web splits country code. But usually pasting the whole number works if we clear first.
-    phoneInput.focus();
-    document.execCommand('insertText', false, num);
-    
-    // Press Enter or click Next
-    const findNextButton = () => {
-      const els = Array.from(document.querySelectorAll('span, div, button'));
-      return els.find(el => {
-        const text = el.innerText || '';
-        return text === 'Next' || text === 'التالي';
-      });
-    };
-    
-    setTimeout(() => {
-      const nextBtn = findNextButton();
-      if (nextBtn) nextBtn.click();
-      else {
-        // Fallback: trigger Enter
-        const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true });
-        phoneInput.dispatchEvent(event);
-      }
-    }, 500);
-  }, phoneNumber);
-
-  // 4. Wait for the code to appear
-  // The code is an 8-character string with a hyphen, usually inside a specific data-testid="pairing-code" or similar.
-  // We'll poll the DOM for 8 characters that look like a code.
-  const code = await page.evaluate(async () => {
-    return new Promise((resolve, reject) => {
-      let attempts = 0;
-      const interval = setInterval(() => {
-        attempts++;
-        if (attempts > 30) {
-          clearInterval(interval);
-          reject(new Error("Timeout waiting for pairing code UI to generate code."));
-          return;
-        }
-        
-        // Search for data-testid="pairing-code" or any element containing exactly 8 uppercase letters/numbers separated by spaces/hyphens
-        const spans = Array.from(document.querySelectorAll('span, div[role="button"] > div'));
-        
-        // WhatsApp Web usually renders the code as data-testid="linking-code" or "pairing-code"
-        const specificEl = document.querySelector('[data-testid="pairing-code"], [data-testid="linking-code"], [data-ref]');
-        if (specificEl && specificEl.innerText && specificEl.innerText.replace(/[^A-Z0-9]/g, '').length === 8) {
-           clearInterval(interval);
-           resolve(specificEl.innerText.replace(/[^A-Z0-9]/g, ''));
-           return;
-        }
-
-        // Heuristic: 8 characters split into spans
-        for (const span of spans) {
-          const text = span.innerText || '';
-          const cleaned = text.replace(/[^A-Z0-9]/g, '');
-          if (cleaned.length === 8 && /^[A-Z0-9]+$/.test(cleaned) && text.includes('-')) {
-            clearInterval(interval);
-            resolve(cleaned);
-            return;
-          }
-        }
-      }, 1000);
-    });
-  });
-
-  return code;
 }
 
 export async function restartLinkingSession() {
@@ -1456,21 +1097,15 @@ async function executeSendMessage(task) {
         throw error;
       }
 
-      chatId = await getPhoneChatId(state.client, formatted, numberId);
-      // If the resolved chatId is still a LID (shouldn't happen but as a safeguard),
-      // force fallback to the standard @c.us format to avoid ACK -1 rejections.
-      if (chatId.endsWith('@lid')) {
-        console.warn(`[WhatsApp Queue] chatId ${chatId} is still a LID after resolution. Forcing @c.us fallback.`);
-        chatId = `${formatted}@c.us`;
-      }
+      chatId = numberId._serialized || chatId;
     } else {
       console.log(`[WhatsApp Queue] Sending directly to ${chatId}; number lookup is disabled for faster delivery.`);
     }
 
     console.log(`[WhatsApp Queue] Sending to ${chatId}${mediaUrl ? ' with media' : ''}...`);
 
-    let media = null;
     if (mediaUrl) {
+      let media;
       if (mediaUrl.startsWith('http')) {
         media = await MessageMedia.fromUrl(mediaUrl);
       } else if (fs.existsSync(mediaUrl)) {
@@ -1479,109 +1114,13 @@ async function executeSendMessage(task) {
         media = await MessageMedia.fromUrl(mediaUrl);
       }
 
-    }
-
-    if (USE_WAJS_SEND) {
-      try {
-        state.waJsReady = await ensureWaJsInjected(state.client);
-      } catch (error) {
-        state.waJsReady = false;
-        console.error('[WhatsApp Queue] WA-JS is unavailable before sending; falling back to the legacy sender:', error.message);
-      }
-    }
-
-    if (state.waJsReady) {
-      const result = await sendMessageWithWaJs(state.client, chatId, task.message, media);
-      const messageId = getMessageId(result);
-      const ack = Number.isInteger(result?.ack) ? result.ack : 0;
-      const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
-      if (!messageId || messageId === 'unknown' || ack < 1) {
-        const error = new Error(`WA-JS did not confirm message ${messageId} to ${chatId}. ACK: ${ack} (${ackLabel})`);
-        error.isPermanent = true;
-        throw error;
-      }
-      console.log(`[WhatsApp Queue] WA-JS confirmed message ${messageId} for ${chatId}. ACK: ${ack} (${ackLabel})`);
-      return { sent: true, messageId, ack, engine: 'wa-js' };
-    }
-
-    // Ultimate Fallback: UI Automation Sender
-    // If all programmatic APIs (WA-JS and wwebjs legacy) fail due to WhatsApp Web updates,
-    // we simulate human typing and clicking which is impossible for WhatsApp to block or reject.
-    if (!media) {
-      try {
-        console.log(`[WhatsApp Queue] Forcing chat open for ${chatId} to prepare UI Automation...`);
-        const opened = await state.client.pupPage.evaluate(async (targetChatId) => {
-          try {
-            if (window.Store && window.Store.Chat && window.Store.Cmd) {
-              const chatWid = window.Store.WidFactory.createWid(targetChatId);
-              const chat = await window.Store.Chat.find(chatWid);
-              if (chat) {
-                await window.Store.Cmd.openChatAt(chat);
-                return true;
-              }
-            }
-            return false;
-          } catch (e) { return false; }
-        }, chatId);
-        
-        if (opened) {
-          await sleep(1500); // Wait for chat UI to load
-          
-          const focused = await state.client.pupPage.evaluate(() => {
-             const footer = document.querySelector('footer');
-             if (!footer) return false;
-             // The chat text box is usually contenteditable="true"
-             const input = footer.querySelector('div[contenteditable="true"]');
-             if (input) {
-                 input.focus();
-                 input.dispatchEvent(new MouseEvent('mousedown', {bubbles: true, cancelable: true, view: window}));
-                 input.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window}));
-                 return true;
-             }
-             return false;
-          });
-
-          if (focused) {
-            console.log(`[WhatsApp Queue] Typing message via UI automation to ${chatId}...`);
-            await state.client.pupPage.keyboard.type(task.message, { delay: 5 });
-            await sleep(500);
-            await state.client.pupPage.keyboard.press('Enter');
-            console.log(`[WhatsApp Queue] Message sent via UI automation to ${chatId}.`);
-            
-            const messageId = 'UI_' + Date.now();
-            return { sent: true, messageId, ack: 1, engine: 'ui-automation' };
-          } else {
-            console.warn('[WhatsApp Queue] Could not focus chat input for UI automation.');
-          }
-        } else {
-            console.warn('[WhatsApp Queue] Could not open chat for UI automation.');
-        }
-      } catch (e) {
-        console.warn('[WhatsApp Queue] UI Automation failed:', e.message);
-      }
-    }
-
-    console.log(`[WhatsApp Queue] Falling back to standard whatsapp-web.js sender for ${chatId}...`);
-    const sentMessage = media
-      ? await state.client.sendMessage(chatId, media, { caption: task.message, waitUntilMsgSent: true, sendSeen: false })
-      : await state.client.sendMessage(chatId, task.message, { waitUntilMsgSent: true, sendSeen: false });
-
-    const messageId = getMessageId(sentMessage);
-    if (!sentMessage || messageId === 'unknown') {
-      const error = new Error(`WhatsApp did not return a message after sending to ${chatId}`);
-      error.isPermanent = true;
-      throw error;
-    }
-
-    console.log(`[WhatsApp Queue] Message ${messageId} queued locally for ${chatId}; waiting for WhatsApp ACK...`);
-    const ack = await waitForMessageAck(state.client, sentMessage);
-    const ackLabel = MESSAGE_ACK_LABELS[ack] || 'unknown';
-    if (ack >= 1) {
-      console.log(`[WhatsApp Queue] Confirmed by WhatsApp for ${chatId}. Message ID: ${messageId}. ACK: ${ack} (${ackLabel})`);
+      await state.client.sendMessage(chatId, media, { caption: task.message });
     } else {
-      console.warn(`[WhatsApp Queue] Message ${messageId} is still pending after ${MESSAGE_ACK_TIMEOUT_MS / 1000}s; it was not marked as delivered.`);
+      await state.client.sendMessage(chatId, task.message);
     }
-    return { sent: true, messageId, ack };
+
+    console.log(`[WhatsApp Queue] Sent successfully to ${chatId}`);
+    return true;
   });
 }
 
