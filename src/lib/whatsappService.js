@@ -1339,6 +1339,24 @@ async function executeSendMessage(task) {
       return { sent: true, messageId, ack, engine: 'wa-js' };
     }
 
+    // Hack to bypass whatsapp-web.js LID cache bug
+    try {
+      await state.client.pupPage.evaluate((targetChatId) => {
+        try {
+          if (window.Store && window.Store.Chat) {
+            const chat = window.Store.Chat.get(targetChatId);
+            if (chat && chat.id && chat.id._serialized && chat.id._serialized.includes('@lid')) {
+              chat.id.server = 'c.us';
+              chat.id.user = targetChatId.split('@')[0];
+              chat.id._serialized = targetChatId;
+            }
+          }
+        } catch (e) {}
+      }, chatId);
+    } catch (e) {
+      console.warn('[WhatsApp Queue] Could not patch LID in browser memory:', e.message);
+    }
+
     const sentMessage = media
       ? await state.client.sendMessage(chatId, media, { caption: task.message, waitUntilMsgSent: true, sendSeen: false })
       : await state.client.sendMessage(chatId, task.message, { waitUntilMsgSent: true, sendSeen: false });
