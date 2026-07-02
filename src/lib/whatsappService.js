@@ -18,7 +18,7 @@ const SEND_TASK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_SEND_TASK_TIMEOUT_MS',
 const TYPING_DELAY_MS = readNonNegativeIntEnv('WHATSAPP_TYPING_DELAY_MS', 20000);
 const NUMBER_LOOKUP_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_LOOKUP_TIMEOUT_MS', 10000);
 const MESSAGE_ACK_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_MESSAGE_ACK_TIMEOUT_MS', 15000);
-const WAJS_INJECT_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_WAJS_INJECT_TIMEOUT_MS', 60000);
+const WAJS_INJECT_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_WAJS_INJECT_TIMEOUT_MS', 15000);
 const NUMBER_VALIDATION_TIMEOUT_MS = readPositiveIntEnv('WHATSAPP_NUMBER_VALIDATION_TIMEOUT_MS', 3000);
 const QR_RENDER_WIDTH = readPositiveIntEnv('WHATSAPP_QR_RENDER_WIDTH', 320);
 const INIT_RETRY_COOLDOWN_MS = readPositiveIntEnv('WHATSAPP_INIT_RETRY_COOLDOWN_MS', 15000);
@@ -148,9 +148,17 @@ function waitForMessageAck(client, sentMessage) {
   const messageId = getMessageId(sentMessage);
   const initialAck = Number.isInteger(sentMessage?.ack) ? sentMessage.ack : 0;
 
+  // ACK -1 on a @lid chatId is a transient routing issue, not a permanent failure.
+  // We mark it transient so the queue retries using the @c.us chatId.
+  const isLidMessage = String(messageId).includes('@lid');
+
   if (initialAck === -1) {
     const error = new Error(`WhatsApp rejected message ${messageId} immediately (ACK -1)`);
-    error.isPermanent = true;
+    if (isLidMessage) {
+      error.isTransient = true;
+    } else {
+      error.isPermanent = true;
+    }
     return Promise.reject(error);
   }
 
@@ -166,8 +174,13 @@ function waitForMessageAck(client, sentMessage) {
       if (getMessageId(message) !== messageId) return;
       if (ack === -1) {
         cleanup();
-        const error = new Error(`WhatsApp rejected message ${messageId} (ACK -1)`);
-        error.isPermanent = true;
+        const rejId = getMessageId(message);
+        const error = new Error(`WhatsApp rejected message ${rejId} (ACK -1)`);
+        if (String(rejId).includes('@lid')) {
+          error.isTransient = true;
+        } else {
+          error.isPermanent = true;
+        }
         reject(error);
         return;
       }
@@ -1272,6 +1285,12 @@ async function executeSendMessage(task) {
       }
 
       chatId = await getPhoneChatId(state.client, formatted, numberId);
+      // If the resolved chatId is still a LID (shouldn't happen but as a safeguard),
+      // force fallback to the standard @c.us format to avoid ACK -1 rejections.
+      if (chatId.endsWith('@lid')) {
+        console.warn(`[WhatsApp Queue] chatId ${chatId} is still a LID after resolution. Forcing @c.us fallback.`);
+        chatId = `${formatted}@c.us`;
+      }
     } else {
       console.log(`[WhatsApp Queue] Sending directly to ${chatId}; number lookup is disabled for faster delivery.`);
     }
