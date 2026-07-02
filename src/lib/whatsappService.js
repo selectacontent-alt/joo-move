@@ -60,26 +60,28 @@ async function ensureWaJsInjected(client) {
     return true;
   }
 
-  console.log('[WhatsApp] Injecting WA-JS delivery engine locally (bypassing CSP)...');
-  let bundlePath = null;
+  console.log('[WhatsApp] Injecting WA-JS delivery engine via Node Fetch (bypassing CSP and Webpack)...');
   try {
-    bundlePath = require.resolve('@wppconnect/wa-js');
+    let content = global.whatsappWaJsCache;
+    if (!content) {
+      const res = await fetch('https://unpkg.com/@wppconnect/wa-js@latest/dist/wppconnect-wa.js');
+      if (res.ok) {
+        content = await res.text();
+        global.whatsappWaJsCache = content;
+      } else {
+        throw new Error(`CDN HTTP Error: ${res.status}`);
+      }
+    }
+    if (content) {
+      await page.evaluate((scriptContent) => {
+        const script = document.createElement('script');
+        script.type = 'text/javascript';
+        script.text = scriptContent;
+        document.head.appendChild(script);
+      }, content);
+    }
   } catch (e) {
-    bundlePath = path.join(process.cwd(), 'node_modules', '@wppconnect', 'wa-js', 'dist', 'wppconnect-wa.js');
-  }
-
-  if (fs.existsSync(bundlePath)) {
-    const content = fs.readFileSync(bundlePath, 'utf8');
-    await page.evaluate((scriptContent) => {
-      const script = document.createElement('script');
-      script.type = 'text/javascript';
-      script.text = scriptContent;
-      document.head.appendChild(script);
-    }, content).catch(e => {
-      console.warn('[WhatsApp] Could not inject WA-JS script:', e.message);
-    });
-  } else {
-    console.warn('[WhatsApp] WA-JS bundle not found at:', bundlePath);
+    console.warn('[WhatsApp] Could not fetch/inject WA-JS script:', e.message);
   }
 
   await page.evaluate(() => {
