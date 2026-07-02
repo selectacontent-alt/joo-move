@@ -3536,31 +3536,44 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                     </div>
                   ) : waStatus === 'WAITING_FOR_SCAN' ? (
                     <div style={{ padding: '2rem', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0' }}>
-                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.1rem' }}>الربط عن طريق رقم الهاتف (Pairing Code)</p>
-                      {!waPairingCode ? (
-                        <form onSubmit={handleRequestPairingCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center' }}>
-                          <input
-                            type="text"
-                            placeholder="مثال مفتاح الدولة بدون +: 201012345678"
-                            value={waPairingPhone}
-                            onChange={e => setWaPairingPhone(e.target.value)}
-                            style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid #cbd5e1', width: '100%', maxWidth: '300px', textAlign: 'center', fontSize: '1.1rem', direction: 'ltr' }}
-                            required
-                          />
-                          <button type="submit" disabled={waPairingLoading} className="btn-admin" style={{ background: 'var(--primary-color)', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem', width: '100%', maxWidth: '300px' }}>
-                            {waPairingLoading ? 'جاري الطلب...' : 'الحصول على الكود'}
-                          </button>
-                          {waPairingError && <p style={{ color: '#ef4444', fontSize: '0.9rem', marginTop: '0.5rem' }}>{waPairingError}</p>}
-                        </form>
-                      ) : (
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
-                          <p style={{ color: '#334155', fontSize: '1rem' }}>افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز &gt; الربط برقم الهاتف بدلاً من ذلك. ثم أدخل الكود التالي:</p>
-                          <div style={{ fontSize: '2.5rem', letterSpacing: '0.5rem', fontWeight: '900', color: 'var(--primary-color)', background: '#fff', padding: '1.5rem', borderRadius: '15px', border: '2px dashed var(--primary-color)' }}>
-                            {waPairingCode}
-                          </div>
-                          <button type="button" onClick={() => setWaPairingCode('')} style={{ background: 'transparent', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', marginTop: '1rem' }}>إلغاء والمحاولة مرة أخرى</button>
+                      <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', marginBottom: '1rem', fontSize: '1.2rem' }}>ربط الواتساب (اختر الطريقة الأنسب لك)</p>
+                      
+                      {/* Option 1: QR Code */}
+                      {waQr && (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '2rem', paddingBottom: '2rem', borderBottom: '1px dashed #cbd5e1' }}>
+                          <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '1rem' }}><strong>الطريقة الأولى (موصى بها):</strong> افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز، ثم امسح الكود التالي بالكاميرا:</p>
+                          <img src={waQr} alt="WhatsApp QR Code" style={{ width: '250px', height: '250px', border: '2px solid var(--primary-color)', borderRadius: '15px', padding: '10px', background: '#fff' }} />
                         </div>
                       )}
+
+                      {/* Option 2: Pairing Code */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <p style={{ color: '#334155', fontSize: '1.1rem', marginBottom: '1rem' }}><strong>الطريقة الثانية (قد تواجه أعطال حالياً):</strong> الربط عن طريق رقم الهاتف</p>
+                        {!waPairingCode ? (
+                          <form onSubmit={handleRequestPairingCode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', width: '100%' }}>
+                            <input
+                              type="text"
+                              placeholder="مثال مفتاح الدولة بدون +: 201012345678"
+                              value={waPairingPhone}
+                              onChange={e => setWaPairingPhone(e.target.value)}
+                              style={{ padding: '0.8rem', borderRadius: '10px', border: '1px solid #cbd5e1', width: '100%', maxWidth: '300px', textAlign: 'center', fontSize: '1.1rem', direction: 'ltr' }}
+                              required
+                            />
+                            <button type="submit" disabled={waPairingLoading} className="btn-admin" style={{ background: 'var(--primary-color)', border: 'none', padding: '0.8rem 1.5rem', fontSize: '1rem', width: '100%', maxWidth: '300px' }}>
+                              {waPairingLoading ? 'جاري الطلب...' : 'الحصول على الكود'}
+                            </button>
+                            {waPairingError && <p style={{ color: '#ef4444', fontSize: '0.9rem', marginTop: '0.5rem', maxWidth: '300px', textAlign: 'center' }}>{waPairingError}</p>}
+                          </form>
+                        ) : (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+                            <p style={{ color: '#334155', fontSize: '1rem' }}>افتح الواتساب على هاتفك &gt; الأجهزة المرتبطة &gt; ربط بجهاز &gt; الربط برقم الهاتف بدلاً من ذلك. ثم أدخل الكود التالي:</p>
+                            <div style={{ fontSize: '2.5rem', letterSpacing: '0.5rem', fontWeight: '900', color: 'var(--primary-color)', background: '#fff', padding: '1.5rem', borderRadius: '15px', border: '2px dashed var(--primary-color)' }}>
+                              {waPairingCode}
+                            </div>
+                            <button type="button" onClick={() => setWaPairingCode('')} style={{ background: 'transparent', border: 'none', color: '#64748b', textDecoration: 'underline', cursor: 'pointer', marginTop: '1rem' }}>إلغاء والمحاولة مرة أخرى</button>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : waStatus === 'ERROR_NO_BACKEND' ? (
                     <div style={{ padding: '2rem', background: '#fef2f2', borderRadius: '15px', border: '1px solid #fecaca', color: '#ef4444', fontWeight: 'bold' }}>
