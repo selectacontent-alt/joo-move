@@ -1,10 +1,4 @@
 export default function robots() {
-  return {
-    rules: {
-      userAgent: '*',
-      allow: '/',
-      disallow: ['/api/', '/admin/', '/AdminPage/'],
-    },
-    sitemap: 'https://Al Rehab.com/sitemap.xml',
-  }
+  const base = process.env.NEXT_PUBLIC_SITE_URL || 'https://joomove.com';
+  return { rules: { userAgent: '*', allow: '/', disallow: ['/api/', '/scpanel/'] }, sitemap: `${base}/sitemap.xml` };
 }

@@ -1,83 +1,27 @@
 import { LanguageProvider } from '../contexts/LanguageContext';
 import TrackingEngine from '../components/TrackingEngine';
 import './globals.css';
-import './agri_styles.css';
-import './product_styles.css';
-import './navbar_footer_styles.css';
-import './booking_styles.css';
+import '../joo/jooMove.css';
 
-export const viewport = {
-  width: 'device-width',
-  initialScale: 1,
-  maximumScale: 5,
-  viewportFit: 'cover',
-};
+export const viewport = { width: 'device-width', initialScale: 1, maximumScale: 5, viewportFit: 'cover' };
 
 export const metadata = {
-  metadataBase: new URL('https://alrehab-agri.com'),
-  title: {
-    template: '%s | شركة الرحاب',
-    default: 'شركة الرحاب | للاستصلاح الزراعي والأعلاف الخضراء',
-  },
-  description: 'شركة الرحاب متخصصة في الاستصلاح الزراعي، زراعة وتوريد المحاصيل العلفية، الأعلاف الخضراء، السيلاج، وخدمة المزارع ومربي الماشية بأعلى جودة.',
-  keywords: ['الرحاب', 'استصلاح زراعي', 'أعلاف خضراء', 'سيلاج', 'برسيم حجازي', 'توريد مزارع', 'محاصيل علفية', 'زراعة'],
-  authors: [{ name: 'Al Rehab' }],
-  creator: 'Al Rehab',
-  publisher: 'Al Rehab',
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
-  },
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://joomove.com'),
+  title: { template: '%s | Joo Move', default: 'Joo Move | نقل وتغليف الأثاث باحتراف' },
+  description: 'نقل وتغليف وفك وتركيب الأثاث للمنازل والمكاتب بفريق مدرب وعربيات مجهزة وخدمة متابعة واضحة.',
+  keywords: ['Joo Move', 'نقل أثاث', 'تغليف أثاث', 'نقل عفش', 'فك وتركيب أثاث', 'نقل مكاتب'],
+  authors: [{ name: 'Joo Move' }], creator: 'Joo Move', publisher: 'Joo Move',
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, 'max-video-preview': -1, 'max-image-preview': 'large', 'max-snippet': -1 } },
   openGraph: {
-    type: 'website',
-    locale: 'ar_EG',
-    url: 'https://alrehab-agri.com',
-    siteName: 'شركة الرحاب الزراعية',
-    title: 'شركة الرحاب | للاستصلاح الزراعي والأعلاف',
-    description: 'توريد علف أخضر، سيلاج، ومحاصيل علفية بجودة عالية لمزارع الإنتاج الحيواني، من الأرض لمزرعتك.',
-    images: [
-      {
-        url: 'https://alrehab-agri.com/logo.png',
-        secureUrl: 'https://alrehab-agri.com/logo.png',
-        width: 800,
-        height: 600,
-        alt: 'Al Rehab Logo',
-        type: 'image/png',
-      },
-    ],
+    type: 'website', locale: 'ar_EG', url: '/', siteName: 'Joo Move',
+    title: 'Joo Move | نقل وتغليف الأثاث',
+    description: 'ننقل عفشك كأنه بتاعنا — نقل وتغليف وفك وتركيب للمنازل والمكاتب.',
+    images: [{ url: '/joo-logo.png', width: 1200, height: 630, alt: 'Joo Move' }],
   },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'شركة الرحاب الزراعية',
-    description: 'توريد علف أخضر، سيلاج، ومحاصيل علفية بجودة عالية.',
-    images: ['https://alrehab-agri.com/logo.png'],
-  },
-  icons: {
-    icon: '/logo.png',
-    shortcut: '/logo.png',
-    apple: '/logo.png'
-  }
+  twitter: { card: 'summary_large_image', title: 'Joo Move | نقل وتغليف الأثاث', description: 'خدمة نقل وتغليف وفك وتركيب احترافية للمنازل والمكاتب.', images: ['/joo-logo.png'] },
+  icons: { icon: '/joo-icon.png', shortcut: '/joo-icon.png', apple: '/joo-icon.png' },
 };
 
 export default function RootLayout({ children }) {
-  return (
-    <html lang="ar" dir="rtl">
-      <body>
-        <LanguageProvider>
-          <TrackingEngine>
-            <div style={{ overflowX: 'hidden', width: '100%', position: 'relative', maxWidth: '100%' }}>
-              {children}
-            </div>
-          </TrackingEngine>
-        </LanguageProvider>
-      </body>
-    </html>
-  );
+  return <html lang="ar" dir="rtl"><body><LanguageProvider><TrackingEngine><div style={{ overflowX: 'hidden', width: '100%', position: 'relative', maxWidth: '100%' }}>{children}</div></TrackingEngine></LanguageProvider></body></html>;
 }

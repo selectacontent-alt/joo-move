@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPool } from '@/lib/db';
 import { hashPassword, verifyPassword } from '@/lib/auth';
+import { adminSessionCookie, createAdminSession } from '@/lib/adminSession';
 
 const parsePermissions = (permissions) => {
   try {
@@ -32,10 +33,12 @@ export async function POST(request) {
         await pool.query('UPDATE users SET password = ? WHERE id = ?', [await hashPassword(password), user.id]);
       }
 
-      return NextResponse.json({
+      const response = NextResponse.json({
         success: true,
         user: { id: user.id, username: user.username, role: user.role, permissions: parsePermissions(user.permissions) }
       });
+      response.cookies.set(adminSessionCookie.name, createAdminSession(user), adminSessionCookie.options);
+      return response;
     } else {
       return NextResponse.json(
         { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' },

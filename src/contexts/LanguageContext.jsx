@@ -50,7 +50,7 @@ export const LanguageProvider = ({ children }) => {
 
   useEffect(() => {
     setIsMounted(true);
-    const savedLang = localStorage.getItem('Al Rehab_lang');
+    const savedLang = localStorage.getItem('joo_move_lang');
     if (savedLang) {
       setLanguage(savedLang);
     }
@@ -58,13 +58,13 @@ export const LanguageProvider = ({ children }) => {
 
   useEffect(() => {
     if (!isMounted) return;
-    localStorage.setItem('Al Rehab_lang', language);
+    localStorage.setItem('joo_move_lang', language);
     document.documentElement.dir = language === 'ar' ? 'rtl' : 'ltr';
     document.documentElement.lang = language;
   }, [language, isMounted]);
 
   useEffect(() => {
-    if (!isMounted || localStorage.getItem('Al Rehab_lang')) return;
+    if (!isMounted || localStorage.getItem('joo_move_lang')) return;
     fetch('/api/settings')
       .then(res => res.json())
       .then(data => {
