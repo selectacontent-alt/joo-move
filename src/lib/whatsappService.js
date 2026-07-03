@@ -3,10 +3,21 @@ import { Client, LocalAuth, MessageMedia } from 'whatsapp-web.js';
 import fs from 'fs';
 import path from 'path';
 import { getPuppeteerLaunchOptions, resolveChromiumExecutablePath } from './puppeteerConfig';
+import {
+  PAIRING_CODE_TTL_MS,
+  createPairingBlock,
+  createSafePairingRequest,
+  getPairingErrorDetails,
+  getPairingRetryAfterSeconds,
+  isPairingBlocked,
+  isPairingCodeFresh
+} from './whatsappPairingPolicy.mjs';
 
 const DEFAULT_AUTH_FOLDER = '.wwebjs_auth';
 const DEFAULT_QUEUE_FOLDER = '.wwebjs_queue';
+const DEFAULT_PAIRING_FOLDER = '.wwebjs_pairing';
 const QUEUE_FILE_NAME = 'messages.json';
+const PAIRING_STATE_FILE_NAME = 'state.json';
 const DEFAULT_CLIENT_ID = 'al-rehab-client';
 
 const QUEUE_MIN_DELAY_MS = readPositiveIntEnv('WHATSAPP_QUEUE_MIN_DELAY_MS', 5000);
@@ -55,6 +66,12 @@ state.lifecyclePhase = state.lifecyclePhase || 'IDLE';
 state.retryTimer = state.retryTimer || null;
 state.transientRestartCount = Number(state.transientRestartCount) || 0;
 state.browserExecutablePath = state.browserExecutablePath || null;
+state.pairingPolicyLoaded = Boolean(state.pairingPolicyLoaded);
+state.pairingFailureCount = Number(state.pairingFailureCount) || 0;
+state.pairingBlockedUntil = Number(state.pairingBlockedUntil) || 0;
+state.pairingFailedAt = Number(state.pairingFailedAt) || 0;
+state.pairingFailureReason = state.pairingFailureReason || null;
+state.pairingFailureHandlingGeneration = Number(state.pairingFailureHandlingGeneration) || 0;
 
 
 function readPositiveIntEnv(name, fallback) {
@@ -134,6 +151,70 @@ function getQueueFilePath() {
   const fallback = path.join(process.cwd(), DEFAULT_QUEUE_FOLDER);
   const queueDir = ensureWritableDir(preferred, fallback, 'queue');
   return path.join(queueDir, QUEUE_FILE_NAME);
+}
+
+function getPairingStateFilePath() {
+  const preferred = process.env.WHATSAPP_PAIRING_DIR || path.join(getDataBaseDir(), DEFAULT_PAIRING_FOLDER);
+  const fallback = path.join(process.cwd(), DEFAULT_PAIRING_FOLDER);
+  const pairingDir = ensureWritableDir(preferred, fallback, 'pairing state');
+  return path.join(pairingDir, PAIRING_STATE_FILE_NAME);
+}
+
+function ensurePairingPolicyLoaded() {
+  if (state.pairingPolicyLoaded) return;
+  state.pairingStateFilePath = getPairingStateFilePath();
+
+  try {
+    if (fs.existsSync(state.pairingStateFilePath)) {
+      const persisted = JSON.parse(fs.readFileSync(state.pairingStateFilePath, 'utf8').replace(/^\uFEFF/, ''));
+      state.pairingFailureCount = Math.max(0, Number(persisted.failureCount) || 0);
+      state.pairingBlockedUntil = Math.max(0, Number(persisted.blockedUntil) || 0);
+      state.pairingFailedAt = Math.max(0, Number(persisted.failedAt) || 0);
+      state.pairingFailureReason = persisted.lastError ? String(persisted.lastError).slice(0, 500) : null;
+    }
+  } catch (error) {
+    console.warn('[WhatsApp Pairing] Failed to load pairing guard state:', getErrorMessage(error));
+  }
+
+  state.pairingPolicyLoaded = true;
+}
+
+function persistPairingPolicy() {
+  ensurePairingPolicyLoaded();
+  try {
+    const payload = JSON.stringify({
+      failureCount: state.pairingFailureCount,
+      blockedUntil: state.pairingBlockedUntil,
+      failedAt: state.pairingFailedAt,
+      lastError: state.pairingFailureReason
+    }, null, 2);
+    const tmpPath = `${state.pairingStateFilePath}.tmp`;
+    fs.writeFileSync(tmpPath, payload);
+    fs.renameSync(tmpPath, state.pairingStateFilePath);
+  } catch (error) {
+    console.warn('[WhatsApp Pairing] Failed to persist pairing guard state:', getErrorMessage(error));
+  }
+}
+
+function clearPairingFailureState() {
+  ensurePairingPolicyLoaded();
+  state.pairingFailureCount = 0;
+  state.pairingBlockedUntil = 0;
+  state.pairingFailedAt = 0;
+  state.pairingFailureReason = null;
+  state.nextInitializeAt = 0;
+  persistPairingPolicy();
+}
+
+function recordPairingFailure(error) {
+  ensurePairingPolicyLoaded();
+  const block = createPairingBlock(state.pairingFailureCount, error);
+  state.pairingFailureCount = block.failureCount;
+  state.pairingBlockedUntil = block.blockedUntil;
+  state.pairingFailedAt = block.failedAt;
+  state.pairingFailureReason = block.lastError;
+  persistPairingPolicy();
+  return block;
 }
 
 function normalizeInvoicePayload(payload) {
@@ -386,7 +467,7 @@ async function destroyClientLocked({ logout = false, killOnTimeout = true } = {}
   const authDir = getAuthDir();
   const clientId = getWhatsappClientId();
 
-  state.lifecycleGeneration += 1;
+  if (client) state.lifecycleGeneration += 1;
   state.client = null;
   state.isInitialized = false;
   state.clientOperationChain = Promise.resolve();
@@ -469,6 +550,40 @@ function handleClientFailure(error, client, generation) {
   }).catch(() => {});
 }
 
+function stopPairingCodeRefresh(client, generation) {
+  setTimeout(() => {
+    if (!isCurrentClient(client, generation) || !client.pupPage) return;
+    client.pupPage.evaluate(() => {
+      if (window.codeInterval) {
+        clearInterval(window.codeInterval);
+        window.codeInterval = undefined;
+      }
+    }).catch((error) => {
+      console.warn('[WhatsApp Pairing] Could not stop automatic code refresh:', getErrorMessage(error));
+    });
+  }, 0);
+}
+
+function handlePairingRequestFailure(error, client, generation) {
+  if (!isCurrentClient(client, generation) || state.pairingFailureHandlingGeneration === generation) return;
+  state.pairingFailureHandlingGeneration = generation;
+  const details = getPairingErrorDetails(error);
+  console.error(`[WhatsApp Lifecycle ${generation}] Phone pairing rejected: ${details.combined}`);
+
+  runLifecycleOperation('phone pairing rejected', async () => {
+    if (!isCurrentClient(client, generation)) return;
+    const block = recordPairingFailure(error);
+    await destroyClientLocked();
+    clearAuthSession(getAuthDir(), getWhatsappClientId());
+    state.pairingCode = null;
+    state.pairingCodeIssuedAt = 0;
+    state.status = 'PAIRING_BLOCKED';
+    state.lifecyclePhase = 'PAIRING_BLOCKED';
+    state.nextInitializeAt = block.blockedUntil;
+    state.lastInitError = `واتساب رفض إنشاء كود الهاتف. تم إيقاف المحاولات مؤقتًا لحماية الرقم. (${details.combined})`;
+  }).catch(() => {});
+}
+
 async function startWhatsAppClientLocked({ pairingPhone = null } = {}) {
   ensureQueueLoaded();
   if (state.client || state.isInitialized) return;
@@ -521,6 +636,11 @@ async function startWhatsAppClientLocked({ pairingPhone = null } = {}) {
     puppeteer: puppeteerOptions
   });
   state.client = client;
+  const originalRequestPairingCode = client.requestPairingCode.bind(client);
+  client.requestPairingCode = createSafePairingRequest(
+    originalRequestPairingCode,
+    (error) => handlePairingRequestFailure(error, client, generation)
+  );
 
   client.on('code', (code) => {
     if (!isCurrentClient(client, generation)) return;
@@ -529,6 +649,9 @@ async function startWhatsAppClientLocked({ pairingPhone = null } = {}) {
     state.pairingCode = String(code || '').trim();
     state.pairingCodeIssuedAt = Date.now();
     state.lastInitError = null;
+    state.pairingFailureHandlingGeneration = 0;
+    clearPairingFailureState();
+    stopPairingCodeRefresh(client, generation);
     console.log(`[WhatsApp Lifecycle ${generation}] Pairing code generated.`);
   });
 
@@ -626,7 +749,8 @@ export function initializeWhatsApp(options = {}) {
 }
 
 export async function getStatus() {
-  if (!state.client && !state.isInitialized && hasStoredAuthSession() && !state.pairingPhoneNumber) {
+  ensurePairingPolicyLoaded();
+  if (!state.client && !state.isInitialized && hasStoredAuthSession() && !state.pairingPhoneNumber && !isPairingBlocked(state.pairingBlockedUntil)) {
     try {
       await initializeWhatsApp();
     } catch (error) {
@@ -639,15 +763,29 @@ export async function getStatus() {
 export function getCachedStatus() {
   const state = global.whatsappState;
   ensureQueueLoaded();
+  ensurePairingPolicyLoaded();
   const executablePath = state.browserExecutablePath || resolveChromiumExecutablePath() || null;
+  const now = Date.now();
+  const pairingRetryAfterSeconds = getPairingRetryAfterSeconds(state.pairingBlockedUntil, now);
+  const pairingBlocked = pairingRetryAfterSeconds > 0;
+  const codeFresh = isPairingCodeFresh(state.pairingCodeIssuedAt, now);
+  const codeExpiresAt = state.pairingCodeIssuedAt ? state.pairingCodeIssuedAt + PAIRING_CODE_TTL_MS : null;
+
+  if (pairingBlocked && !['CONNECTED', 'AUTHENTICATED'].includes(state.status) && !state.client) {
+    state.status = 'PAIRING_BLOCKED';
+    state.lifecyclePhase = 'PAIRING_BLOCKED';
+    state.lastInitError = state.lastInitError
+      || `واتساب رفض إنشاء كود الهاتف. المحاولة التالية متاحة بعد انتهاء فترة الحماية. (${state.pairingFailureReason || 'pairing rejected'})`;
+  }
 
   return {
     status: state.status || 'DISCONNECTED',
     phase: state.lifecyclePhase || 'IDLE',
     lastInitError: state.lastInitError,
-    retryInSeconds: state.nextInitializeAt > Date.now()
-      ? Math.ceil((state.nextInitializeAt - Date.now()) / 1000)
-      : 0,
+    retryInSeconds: Math.max(
+      state.nextInitializeAt > now ? Math.ceil((state.nextInitializeAt - now) / 1000) : 0,
+      pairingRetryAfterSeconds
+    ),
     queuedMessages: state.messageQueue.length,
     isProcessingQueue: state.isProcessingQueue,
     isInitialized: state.isInitialized,
@@ -655,7 +793,13 @@ export function getCachedStatus() {
     pairing: {
       code: state.pairingCode || null,
       phoneMasked: maskPhoneNumber(state.pairingPhoneNumber),
-      issuedAt: state.pairingCodeIssuedAt || null
+      issuedAt: state.pairingCodeIssuedAt || null,
+      expiresAt: codeExpiresAt,
+      codeFresh,
+      blockedUntil: state.pairingBlockedUntil || null,
+      retryAfterSeconds: pairingRetryAfterSeconds,
+      canRetry: !pairingBlocked && !codeFresh,
+      failureCount: state.pairingFailureCount
     },
     browser: {
       ready: Boolean(executablePath),
@@ -682,6 +826,7 @@ export async function logout() {
 }
 
 export async function requestPairingCode(phoneNumber) {
+  ensurePairingPolicyLoaded();
   if (state.status === 'CONNECTED' || state.status === 'AUTHENTICATED') {
     const error = new Error('WhatsApp is already connected.');
     error.statusCode = 409;
@@ -695,6 +840,13 @@ export async function requestPairingCode(phoneNumber) {
     throw error;
   }
 
+  if (isPairingBlocked(state.pairingBlockedUntil)) {
+    const error = new Error('تم إيقاف محاولات كود الهاتف مؤقتًا لحماية الرقم من الحظر.');
+    error.statusCode = 429;
+    error.retryAfterSeconds = getPairingRetryAfterSeconds(state.pairingBlockedUntil);
+    throw error;
+  }
+
   return runLifecycleOperation('phone pairing', async () => {
     if (['CONNECTED', 'AUTHENTICATED'].includes(state.status)) {
       const error = new Error('WhatsApp is already connected.');
@@ -702,10 +854,30 @@ export async function requestPairingCode(phoneNumber) {
       throw error;
     }
 
+    if (isPairingBlocked(state.pairingBlockedUntil)) {
+      const error = new Error('تم إيقاف محاولات كود الهاتف مؤقتًا لحماية الرقم من الحظر.');
+      error.statusCode = 429;
+      error.retryAfterSeconds = getPairingRetryAfterSeconds(state.pairingBlockedUntil);
+      throw error;
+    }
+
     const sameAttempt = state.pairingPhoneNumber === cleanedNumber
       && state.client
       && ['INITIALIZING', 'PAIRING'].includes(state.status);
-    if (sameAttempt) return getCachedStatus();
+    if (sameAttempt && isPairingCodeFresh(state.pairingCodeIssuedAt)) {
+      return { ...getCachedStatus(), requestDisposition: 'cached' };
+    }
+    if (sameAttempt && state.status === 'INITIALIZING' && !state.pairingCode) {
+      return { ...getCachedStatus(), requestDisposition: 'started' };
+    }
+    if (sameAttempt && state.status === 'PAIRING') {
+      state.pairingCode = null;
+      state.pairingCodeIssuedAt = 0;
+      state.status = 'INITIALIZING';
+      state.lifecyclePhase = 'REGENERATING_CODE';
+      await state.client.requestPairingCode(cleanedNumber, true, PAIRING_CODE_INTERVAL_MS);
+      return { ...getCachedStatus(), requestDisposition: 'started' };
+    }
 
     state.isRequestingPairingCode = true;
     clearLifecycleTimer();
@@ -720,11 +892,12 @@ export async function requestPairingCode(phoneNumber) {
     state.pairingCode = null;
     state.pairingCodeIssuedAt = 0;
     state.transientRestartCount = 0;
+    state.pairingFailureHandlingGeneration = 0;
     state.status = 'INITIALIZING';
     state.lifecyclePhase = 'STARTING_PAIRING';
     try {
       await startWhatsAppClientLocked({ pairingPhone: cleanedNumber });
-      return getCachedStatus();
+      return { ...getCachedStatus(), requestDisposition: 'started' };
     } finally {
       state.isRequestingPairingCode = false;
     }
@@ -734,6 +907,10 @@ export async function requestPairingCode(phoneNumber) {
 export async function restartLinkingSession() {
   return runLifecycleOperation('restart', async () => {
     ensureQueueLoaded();
+    ensurePairingPolicyLoaded();
+    if (isPairingBlocked(state.pairingBlockedUntil) || (state.pairingPhoneNumber && state.status !== 'CONNECTED')) {
+      return getCachedStatus();
+    }
     clearLifecycleTimer();
     state.isRestarting = true;
     try {

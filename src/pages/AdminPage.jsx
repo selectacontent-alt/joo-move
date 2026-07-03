@@ -8,6 +8,13 @@ import AdminCustomers from '../components/AdminCustomers';
 import { clearJsonCache } from '../lib/prefetchCache';
 import { normalizeMediaUrl } from '../lib/mediaUtils';
 
+const formatWaCountdown = (seconds) => {
+  const total = Math.max(0, Number(seconds) || 0);
+  if (total >= 3600) return `${Math.ceil(total / 3600)} ساعة`;
+  if (total >= 60) return `${Math.ceil(total / 60)} دقيقة`;
+  return `${total} ثانية`;
+};
+
 // SVG Icons for professional look
 const Icons = {
   Dashboard: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="9" /><rect x="14" y="3" width="7" height="5" /><rect x="14" y="12" width="7" height="9" /><rect x="3" y="16" width="7" height="5" /></svg>,
@@ -360,6 +367,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
   const [waQueuedMessages, setWaQueuedMessages] = useState(0);
   const [waLastError, setWaLastError] = useState(null);
   const [waBrowserReady, setWaBrowserReady] = useState(false);
+  const [waPairingInfo, setWaPairingInfo] = useState({ codeFresh: false, retryAfterSeconds: 0, canRetry: true, failureCount: 0 });
 
   const [waPairingPhone, setWaPairingPhone] = useState('');
   const [waPairingCode, setWaPairingCode] = useState('');
@@ -381,6 +389,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
       if (!res.ok) throw new Error(data.error || 'Failed to request code');
       setWaStatus(data.status || 'INITIALIZING');
       setWaPhase(data.phase || 'STARTING_PAIRING');
+      setWaPairingInfo(data.pairing || {});
       if (data.pairing?.code) setWaPairingCode(data.pairing.code);
     } catch (err) {
       setWaPairingError(err.message);
@@ -404,7 +413,9 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
           setWaPhase(data.phase || 'IDLE');
           setWaBrowserReady(Boolean(data.browser?.ready));
           setWaLastError(data.lastInitError || null);
+          setWaPairingInfo(data.pairing || {});
           if (data.pairing?.code) setWaPairingCode(data.pairing.code);
+          else if (['PAIRING_BLOCKED', 'ERROR', 'AUTH_FAILURE', 'DISCONNECTED'].includes(nextStatus)) setWaPairingCode('');
           if (nextStatus === 'CONNECTED') {
             setWaPairingCode('');
             setWaPairingError('');
@@ -430,6 +441,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
       if (res.ok) {
         setWaStatus(data.status || 'INITIALIZING');
         setWaPhase(data.phase || 'RESTORING_SESSION');
+        setWaPairingInfo(data.pairing || {});
         if (data.pairing?.code) setWaPairingCode(data.pairing.code);
         setWaQueuedMessages(Number(data.queuedMessages) || 0);
       } else {
@@ -3544,13 +3556,13 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                     <form onSubmit={handleRequestPairingCode} style={{ width: 'min(100%, 460px)', padding: '2rem', background: '#f8fafc', borderRadius: '15px', border: '1px solid #e2e8f0', display: 'grid', gap: '1rem' }}>
                       <p style={{ color: 'var(--text-dark)', fontWeight: 'bold', fontSize: '1.2rem' }}>ربط واتساب بكود الهاتف</p>
                       <p style={{ color: '#64748b', fontSize: '0.9rem' }}>الحالة: {waStatus} — المرحلة: {waPhase} — Chromium: {waBrowserReady ? 'جاهز' : 'غير موجود'}</p>
+                      {Number(waPairingInfo.retryAfterSeconds || 0) > 0 && <p style={{ color: '#b45309', background: '#fffbeb', padding: '0.8rem', borderRadius: '10px', fontSize: '0.9rem' }}>تم إيقاف المحاولات لحماية الرقم. متاح بعد {formatWaCountdown(waPairingInfo.retryAfterSeconds)}.</p>}
                       <input dir="ltr" inputMode="tel" value={waPairingPhone} onChange={(event) => setWaPairingPhone(event.target.value)} placeholder="201012345678" style={{ width: '100%', minHeight: '48px', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '0 1rem', fontWeight: 800 }} />
-                      <button type="submit" disabled={waPairingLoading || ['INITIALIZING', 'PAIRING', 'RETRY_WAIT'].includes(waStatus) || !waPairingPhone.trim()} className="btn-admin" style={{ border: 'none', padding: '0.85rem 1.5rem' }}>
-                        {waPairingLoading || ['INITIALIZING', 'RETRY_WAIT'].includes(waStatus) ? 'جارٍ تجهيز الكود...' : 'إنشاء كود الربط'}
+                      <button type="submit" disabled={waPairingLoading || ['INITIALIZING', 'RETRY_WAIT'].includes(waStatus) || (waStatus === 'PAIRING' && waPairingInfo.codeFresh) || Number(waPairingInfo.retryAfterSeconds || 0) > 0 || !waPairingPhone.trim()} className="btn-admin" style={{ border: 'none', padding: '0.85rem 1.5rem' }}>
+                        {Number(waPairingInfo.retryAfterSeconds || 0) > 0 ? `متاح بعد ${formatWaCountdown(waPairingInfo.retryAfterSeconds)}` : waPairingLoading || ['INITIALIZING', 'RETRY_WAIT'].includes(waStatus) ? 'جارٍ تجهيز الكود...' : waPairingCode && !waPairingInfo.codeFresh ? 'إنشاء كود جديد' : 'إنشاء كود الربط'}
                       </button>
-                      {waPairingCode && <div style={{ padding: '1rem', borderRadius: '12px', color: '#fff', background: '#075277' }}><small>واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف</small><strong dir="ltr" style={{ display: 'block', margin: '0.7rem 0', color: '#7ce4c0', fontSize: '2rem', letterSpacing: '0.22em' }}>{waPairingCode}</strong><small>الكود يتجدد تلقائيًا عند الحاجة</small></div>}
+                      {waPairingCode && <div style={{ padding: '1rem', borderRadius: '12px', color: '#fff', background: '#075277' }}><small>واتساب ← الأجهزة المرتبطة ← ربط جهاز ← الربط برقم الهاتف</small><strong dir="ltr" style={{ display: 'block', margin: '0.7rem 0', color: '#7ce4c0', fontSize: '2rem', letterSpacing: '0.22em' }}>{waPairingCode}</strong><small>{waPairingInfo.codeFresh ? 'أدخل الكود قبل انتهاء ثلاث دقائق' : 'انتهت صلاحية الكود — أنشئ كودًا جديدًا'}</small></div>}
                       {waPairingError && <p style={{ color: '#b91c1c', fontSize: '0.9rem' }}>{waPairingError}</p>}
-                      <button type="button" onClick={handleWaRestart} disabled={waPairingLoading} style={{ border: 0, background: 'transparent', color: '#334155', cursor: 'pointer', fontWeight: 800 }}>إعادة محاولة التشغيل</button>
                     </form>
                   )}
                 </div>
