@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, Boxes, Building2, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Facebook,
-  Headphones, Home, Instagram, Languages, MapPin, Menu, MessageCircle, PackageCheck,
+  Headphones, Home, Instagram, MapPin, Menu, MessageCircle, PackageCheck,
   Phone, Play, Route, Search, Send, ShieldCheck, Sparkles, Star, Truck, UploadCloud,
   UserRound, Wrench, X
 } from 'lucide-react';
@@ -174,7 +174,9 @@ function Header({ path, navigate, settings }) {
           {links.map(([href, label]) => <button className={path === href ? 'active' : ''} key={href} onClick={() => go(href)}>{label}</button>)}
         </nav>
         <div className="jm-nav-actions">
-          <button className="jm-language" onClick={toggleLanguage}><Languages size={18} /> {language === 'ar' ? 'EN' : 'عربي'}</button>
+          <button className="jm-language" onClick={toggleLanguage} aria-label={language === 'ar' ? 'Switch to English' : 'Switch to Arabic'}>
+            {language === 'ar' ? 'EN' : 'AR'}
+          </button>
           <button className="jm-btn jm-btn-red jm-nav-cta" onClick={() => go('/request-move')}>{c.nav.request} <ArrowUpLeft size={18} /></button>
           <button className="jm-menu" onClick={() => setOpen(!open)} aria-label="Menu">{open ? <X /> : <Menu />}</button>
         </div>
