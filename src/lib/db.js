@@ -415,7 +415,7 @@ export async function getPool() {
         phone VARCHAR(50) NOT NULL,
         whatsapp VARCHAR(50) NULL,
         alternate_phone VARCHAR(50) NULL,
-        move_type VARCHAR(80) NOT NULL DEFAULT 'home',
+        move_type VARCHAR(80) NOT NULL DEFAULT 'apartment',
         origin_governorate VARCHAR(160) NULL,
         origin_area VARCHAR(255) NOT NULL,
         origin_address TEXT NULL,

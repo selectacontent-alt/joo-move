@@ -18,6 +18,44 @@ import JooAdmin from './JooAdmin';
 const ICONS = { Truck, PackageCheck, Wrench, Boxes, Building2 };
 const pick = (language, ar, en) => language === 'ar' ? ar : en;
 const cleanPhone = (value) => String(value || '').replace(/\D/g, '');
+const MOVE_TYPE_OPTIONS = [
+  { value: 'apartment', ar: 'شقة', en: 'Apartment', icon: Home },
+  { value: 'villa', ar: 'ڤيلا', en: 'Villa', icon: Home },
+  { value: 'office', ar: 'مكتب', en: 'Office', icon: Building2 },
+];
+const MOVE_TYPE_LABELS = {
+  home: { ar: 'شقة', en: 'Apartment' },
+  apartment: { ar: 'شقة', en: 'Apartment' },
+  villa: { ar: 'ڤيلا', en: 'Villa' },
+  office: { ar: 'مكتب', en: 'Office' },
+};
+const REQUEST_SERVICE_ORDER = ['furniture-moving', 'professional-packing', 'loading', 'assembly', 'electrical'];
+const SERVICE_TEXT_OVERRIDES = {
+  'furniture-moving': { title_ar: 'نقل الاثاث بدون تغليف', title_en: 'Furniture moving without packing', sort_order: 1 },
+  'professional-packing': { title_ar: 'التغليف الكامل', title_en: 'Full packing', sort_order: 2 },
+  loading: { title_ar: 'خدمة الونش', title_en: 'Hoist service', sort_order: 3 },
+  assembly: { title_ar: 'فك وتركيب الاثاث', title_en: 'Furniture disassembly and assembly', sort_order: 4 },
+  electrical: { title_ar: 'خدمات كهربائية', title_en: 'Electrical services', sort_order: 5 },
+};
+const moveTypeLabel = (language, value) => {
+  const label = MOVE_TYPE_LABELS[value] || MOVE_TYPE_LABELS.apartment;
+  return pick(language, label.ar, label.en);
+};
+const normalizeJooServices = (services = []) => {
+  const source = Array.isArray(services) && services.length ? services : DEFAULT_SERVICES;
+  const bySlug = new Map([...DEFAULT_SERVICES, ...source]
+    .filter((service) => service?.slug && service.slug !== 'home-office')
+    .map((service) => [service.slug, { ...service }]));
+  REQUEST_SERVICE_ORDER.forEach((slug, index) => {
+    const service = bySlug.get(slug);
+    if (service) bySlug.set(slug, { ...service, ...SERVICE_TEXT_OVERRIDES[slug], sort_order: index + 1 });
+  });
+  return [...bySlug.values()].sort((a, b) => Number(a.sort_order || 999) - Number(b.sort_order || 999));
+};
+const getMoveContentServices = (services = []) => {
+  const normalized = normalizeJooServices(services);
+  return REQUEST_SERVICE_ORDER.map((slug) => normalized.find((service) => service.slug === slug)).filter(Boolean);
+};
 const whatsappInquiry = (language) => pick(
   language,
   'مرحبًا Joo Move، أريد الاستفسار عن نقل وتغليف الأثاث وتحديد موعد مناسب.',
@@ -28,12 +66,12 @@ const whatsappUrl = (phone, language) => `https://wa.me/${cleanPhone(phone)}?tex
 const copy = {
   ar: {
     nav: { home: 'الرئيسية', services: 'خدماتنا', work: 'شغلنا', about: 'عن Joo Move', track: 'تابع طلبك', contact: 'تواصل معنا', request: 'اطلب نقلة' },
-    quick: { from: 'هتنقل منين؟', to: 'إلى فين؟', type: 'نوع المكان', phone: 'رقم الهاتف', home: 'منزل', office: 'مكتب', start: 'ابدأ طلبك' },
+    quick: { from: 'هتنقل منين؟', to: 'إلى فين؟', type: 'نوع المكان', phone: 'رقم الهاتف', apartment: 'شقة', villa: 'ڤيلا', office: 'مكتب', start: 'ابدأ طلبك' },
     common: { explore: 'اعرف التفاصيل', request: 'اطلب الخدمة', allServices: 'شوف كل الخدمات', whatsapp: 'واتساب مباشر', loading: 'جارٍ التحميل...' },
   },
   en: {
     nav: { home: 'Home', services: 'Services', work: 'Our Work', about: 'About Joo Move', track: 'Track Request', contact: 'Contact', request: 'Request a Move' },
-    quick: { from: 'Moving from?', to: 'Destination?', type: 'Property type', phone: 'Phone number', home: 'Home', office: 'Office', start: 'Start request' },
+    quick: { from: 'Moving from?', to: 'Destination?', type: 'Property type', phone: 'Phone number', apartment: 'Apartment', villa: 'Villa', office: 'Office', start: 'Start request' },
     common: { explore: 'Explore service', request: 'Request service', allServices: 'View all services', whatsapp: 'WhatsApp us', loading: 'Loading...' },
   }
 };
@@ -74,7 +112,7 @@ function usePublicData() {
       const value = (index, fallback) => results[index].status === 'fulfilled' && results[index].value ? results[index].value : fallback;
       const testimonials = value(3, []);
       setData({
-        services: value(0, []).length ? value(0, []) : DEFAULT_SERVICES,
+        services: normalizeJooServices(value(0, [])),
         areas: value(1, []).length ? value(1, []) : DEFAULT_AREAS,
         faqs: value(2, []).length ? value(2, []) : DEFAULT_FAQS,
         testimonials: testimonials.some((item) => item.text_ar || item.text_en) ? testimonials : DEFAULT_TESTIMONIALS,
@@ -192,7 +230,7 @@ function Header({ path, navigate, settings }) {
 function QuickRequest({ navigate }) {
   const { language } = useLanguage();
   const c = copy[language].quick;
-  const [quick, setQuick] = useState({ origin_area: '', destination_area: '', move_type: 'home', phone: '' });
+  const [quick, setQuick] = useState({ origin_area: '', destination_area: '', move_type: 'apartment', phone: '' });
   const submit = (event) => {
     event.preventDefault();
     sessionStorage.setItem('joo_quick_request', JSON.stringify(quick));
@@ -220,7 +258,7 @@ function QuickRequest({ navigate }) {
       <div className="jm-qf-input">
         <span>{c.type}</span>
         <select value={quick.move_type} onChange={(e) => setQuick({ ...quick, move_type: e.target.value })}>
-          <option value="home">{c.home}</option><option value="office">{c.office}</option>
+          {MOVE_TYPE_OPTIONS.map((option) => <option value={option.value} key={option.value}>{pick(language, option.ar, option.en)}</option>)}
         </select>
       </div>
     </label>
@@ -442,7 +480,7 @@ function AnimatedNumber({ value }) {
 function ProofSection({ section, navigate }) {
   const { language } = useLanguage();
   const content = language === 'ar' ? section.content_ar : section.content_en;
-  const stats = [['1200+', 'نقلة مكتملة', 'Completed moves'], ['8+', 'سنوات خبرة', 'Years experience'], ['98%', 'رضا العملاء', 'Customer satisfaction']];
+  const stats = [['1200+', 'نقلة مكتملة', 'Completed moves'], ['14+', 'سنوات خبرة', 'Years experience'], ['98%', 'رضا العملاء', 'Customer satisfaction']];
   return <section className="jm-section jm-proof"><div className="jm-container jm-proof-grid">
     <div className="jm-proof-media"><div className="jm-proof-main"><img src="/joo/packing-team.jpg" alt={pick(language, 'فريق Joo Move أثناء تغليف الأثاث', 'Joo Move team packing furniture')} /></div><div className="jm-proof-float"><PackageCheck /><b>{pick(language, '4 طبقات حماية', '4 protection layers')}</b><small>{pick(language, 'حسب نوع القطعة', 'Matched to every item')}</small></div></div>
     <div className="jm-proof-copy"><SectionHead {...content} /><ul><li><Check />{pick(language, 'استرتش وبابلز وكرتون وزوايا حماية', 'Stretch wrap, bubble wrap, cartons and corner guards')}</li><li><Check />{pick(language, 'ترقيم الكراتين والقطع قبل التحميل', 'Every carton and item labeled before loading')}</li><li><Check />{pick(language, 'ترتيب التحميل حسب الأولوية والوزن', 'Loading planned by weight and priority')}</li></ul><button className="jm-btn jm-btn-navy" onClick={() => navigate('/request-move')}>{copy[language].common.request}<ArrowLeft /></button></div>
@@ -536,7 +574,7 @@ const EGYPT_GOVERNORATES = [
 ];
 
 const initialRequest = {
-  customer_name: '', phone: '', whatsapp: '', alternate_phone: '', move_type: 'home',
+  customer_name: '', phone: '', whatsapp: '', alternate_phone: '', move_type: 'apartment',
   origin_governorate: 'القاهرة', origin_area: '', origin_address: '', destination_governorate: 'القاهرة', destination_area: '', destination_address: '',
   origin_floor: '', destination_floor: '', origin_elevator: false, destination_elevator: false,
   stair_width: 'normal', parking_distance: 'near', rooms: 2, appliances: [], large_items: '',
@@ -553,6 +591,7 @@ function RequestMovePage({ services, navigate }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(null);
+  const moveContentServices = useMemo(() => getMoveContentServices(services), [services]);
   useEffect(() => {
     try {
       const saved = JSON.parse(localStorage.getItem('joo_move_draft') || 'null');
@@ -600,12 +639,12 @@ function RequestMovePage({ services, navigate }) {
     <section className="jm-container jm-wizard-shell"><div className="jm-wizard-progress">{WIZARD_STEPS.map(([ar, en], index) => <button key={ar} className={index === step ? 'active' : index < step ? 'done' : ''} onClick={() => index < step && setStep(index)}><span>{index < step ? <Check size={16} /> : index + 1}</span><b>{pick(language, ar, en)}</b></button>)}</div>
       <div className="jm-wizard-card"><div className="jm-wizard-title"><span>{pick(language, `الخطوة ${step + 1} من 6`, `Step ${step + 1} of 6`)}</span><h2>{pick(language, WIZARD_STEPS[step][0], WIZARD_STEPS[step][1])}</h2></div>
         <div className="jm-form-grid">
-          {step === 0 && <><Field label={pick(language, 'الاسم بالكامل *', 'Full name *')} wide><input value={form.customer_name} onChange={(e) => update('customer_name', e.target.value)} /></Field><Field label={pick(language, 'رقم الهاتف *', 'Phone *')}><input inputMode="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} /></Field><Field label={pick(language, 'رقم واتساب', 'WhatsApp')}><input inputMode="tel" value={form.whatsapp} onChange={(e) => update('whatsapp', e.target.value)} placeholder={pick(language, 'اتركه فارغًا لو نفس الرقم', 'Leave blank if same number')} /></Field><Field label={pick(language, 'هاتف بديل', 'Alternate phone')}><input inputMode="tel" value={form.alternate_phone} onChange={(e) => update('alternate_phone', e.target.value)} /></Field><Field label={pick(language, 'نوع النقلة', 'Move type')}><div className="jm-choice-row"><button className={form.move_type === 'home' ? 'active' : ''} onClick={() => update('move_type', 'home')} type="button"><Home />{pick(language, 'منزل', 'Home')}</button><button className={form.move_type === 'office' ? 'active' : ''} onClick={() => update('move_type', 'office')} type="button"><Building2 />{pick(language, 'مكتب', 'Office')}</button></div></Field></>}
-          {step === 1 && <><Field label={pick(language, 'محافظة النقل', 'Origin governorate')}><select value={form.origin_governorate} onChange={(e) => update('origin_governorate', e.target.value)}>{EGYPT_GOVERNORATES.map(([ar, en]) => <option key={ar} value={ar}>{pick(language, ar, en)}</option>)}</select></Field><Field label={pick(language, 'منطقة النقل *', 'Origin area *')}><input value={form.origin_area} onChange={(e) => update('origin_area', e.target.value)} /></Field><Field label={pick(language, 'العنوان الحالي بالتفصيل', 'Current address')} wide><textarea value={form.origin_address} onChange={(e) => update('origin_address', e.target.value)} /></Field><Field label={pick(language, 'محافظة الوجهة', 'Destination governorate')}><select value={form.destination_governorate} onChange={(e) => update('destination_governorate', e.target.value)}>{EGYPT_GOVERNORATES.map(([ar, en]) => <option key={ar} value={ar}>{pick(language, ar, en)}</option>)}</select></Field><Field label={pick(language, 'منطقة الوجهة *', 'Destination area *')}><input value={form.destination_area} onChange={(e) => update('destination_area', e.target.value)} /></Field><Field label={pick(language, 'عنوان الوجهة بالتفصيل', 'Destination address')} wide><textarea value={form.destination_address} onChange={(e) => update('destination_address', e.target.value)} /></Field></>}
-          {step === 2 && <><Field label={pick(language, 'دور النقل', 'Origin floor')}><input value={form.origin_floor} onChange={(e) => update('origin_floor', e.target.value)} placeholder="مثال: 3" /></Field><Field label={pick(language, 'دور الوجهة', 'Destination floor')}><input value={form.destination_floor} onChange={(e) => update('destination_floor', e.target.value)} /></Field><Field label={pick(language, 'الأسانسير في مكان النقل', 'Origin elevator')}><div className="jm-switch-row"><button type="button" className={form.origin_elevator ? 'active' : ''} onClick={() => update('origin_elevator', true)}>{pick(language, 'موجود', 'Available')}</button><button type="button" className={!form.origin_elevator ? 'active' : ''} onClick={() => update('origin_elevator', false)}>{pick(language, 'غير موجود', 'None')}</button></div></Field><Field label={pick(language, 'الأسانسير في الوجهة', 'Destination elevator')}><div className="jm-switch-row"><button type="button" className={form.destination_elevator ? 'active' : ''} onClick={() => update('destination_elevator', true)}>{pick(language, 'موجود', 'Available')}</button><button type="button" className={!form.destination_elevator ? 'active' : ''} onClick={() => update('destination_elevator', false)}>{pick(language, 'غير موجود', 'None')}</button></div></Field><Field label={pick(language, 'عرض السلم', 'Stair width')}><select value={form.stair_width} onChange={(e) => update('stair_width', e.target.value)}><option value="wide">{pick(language, 'واسع', 'Wide')}</option><option value="normal">{pick(language, 'متوسط', 'Normal')}</option><option value="narrow">{pick(language, 'ضيق', 'Narrow')}</option></select></Field><Field label={pick(language, 'وقوف العربية', 'Truck parking')}><select value={form.parking_distance} onChange={(e) => update('parking_distance', e.target.value)}><option value="near">{pick(language, 'أمام المدخل', 'At entrance')}</option><option value="medium">{pick(language, 'مسافة قصيرة', 'Short distance')}</option><option value="far">{pick(language, 'بعيد عن المدخل', 'Far from entrance')}</option></select></Field></>}
-          {step === 3 && <><Field label={pick(language, 'عدد الغرف التقريبي', 'Approximate rooms')}><div className="jm-counter"><button type="button" onClick={() => update('rooms', Math.max(1, form.rooms - 1))}>−</button><b>{form.rooms}</b><button type="button" onClick={() => update('rooms', form.rooms + 1)}>+</button></div></Field><Field label={pick(language, 'الأجهزة الكبيرة', 'Large appliances')} wide><div className="jm-checkbox-grid">{[['fridge', 'ثلاجة', 'Fridge'], ['washer', 'غسالة', 'Washer'], ['oven', 'بوتاجاز', 'Oven'], ['ac', 'تكييف', 'AC'], ['tv', 'شاشة', 'TV']].map(([id, ar, en]) => <button type="button" className={form.appliances.includes(id) ? 'active' : ''} onClick={() => toggleArray('appliances', id)} key={id}><Check />{pick(language, ar, en)}</button>)}</div></Field><Field label={pick(language, 'الخدمات المطلوبة *', 'Services needed *')} wide><div className="jm-checkbox-grid jm-services-check">{services.map((service) => <button type="button" className={form.services.includes(service.slug) ? 'active' : ''} onClick={() => toggleArray('services', service.slug)} key={service.slug}><Check />{service[`title_${language}`] || service.title_ar}</button>)}</div></Field><Field label={pick(language, 'قطع كبيرة أو حساسة', 'Large or delicate items')} wide><textarea value={form.large_items} onChange={(e) => update('large_items', e.target.value)} placeholder={pick(language, 'مثال: بيانو، نيش زجاج، سفرة كبيرة...', 'e.g. piano, glass cabinet, large dining table...')} /></Field></>}
+          {step === 0 && <><Field label={pick(language, 'الاسم بالكامل *', 'Full name *')} wide><input value={form.customer_name} onChange={(e) => update('customer_name', e.target.value)} /></Field><Field label={pick(language, 'رقم الهاتف *', 'Phone *')}><input inputMode="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} /></Field><Field label={pick(language, 'رقم واتساب', 'WhatsApp')}><input inputMode="tel" value={form.whatsapp} onChange={(e) => update('whatsapp', e.target.value)} placeholder={pick(language, 'اتركه فارغًا لو نفس الرقم', 'Leave blank if same number')} /></Field><Field label={pick(language, 'هاتف بديل', 'Alternate phone')}><input inputMode="tel" value={form.alternate_phone} onChange={(e) => update('alternate_phone', e.target.value)} /></Field><Field label={pick(language, 'نوع النقلة', 'Move type')}><div className="jm-choice-row">{MOVE_TYPE_OPTIONS.map(({ value, ar, en, icon: Icon }) => <button className={form.move_type === value ? 'active' : ''} onClick={() => update('move_type', value)} type="button" key={value}><Icon />{pick(language, ar, en)}</button>)}</div></Field></>}
+          {step === 1 && <><Field label={pick(language, 'محافظة النقل', 'Origin governorate')}><select value={form.origin_governorate} onChange={(e) => update('origin_governorate', e.target.value)}>{EGYPT_GOVERNORATES.map(([ar, en]) => <option key={ar} value={ar}>{pick(language, ar, en)}</option>)}</select></Field><Field label={pick(language, 'منطقة النقل *', 'Origin area *')}><input value={form.origin_area} onChange={(e) => update('origin_area', e.target.value)} /></Field><Field label={pick(language, 'عنوان تحميل النقلة', 'Loading address')} wide><textarea value={form.origin_address} onChange={(e) => update('origin_address', e.target.value)} placeholder={pick(language, 'من /', 'From /')} /></Field><Field label={pick(language, 'محافظة الوجهة', 'Destination governorate')}><select value={form.destination_governorate} onChange={(e) => update('destination_governorate', e.target.value)}>{EGYPT_GOVERNORATES.map(([ar, en]) => <option key={ar} value={ar}>{pick(language, ar, en)}</option>)}</select></Field><Field label={pick(language, 'منطقة الوجهة *', 'Destination area *')}><input value={form.destination_area} onChange={(e) => update('destination_area', e.target.value)} /></Field><Field label={pick(language, 'عنوان تنزيل النقلة', 'Unloading address')} wide><textarea value={form.destination_address} onChange={(e) => update('destination_address', e.target.value)} placeholder={pick(language, 'الى /', 'To /')} /></Field></>}
+          {step === 2 && <><Field label={pick(language, 'الدور الحالى', 'Current floor')}><input value={form.origin_floor} onChange={(e) => update('origin_floor', e.target.value)} placeholder="مثال: 3" /></Field><Field label={pick(language, 'الدور الجديد', 'New floor')}><input value={form.destination_floor} onChange={(e) => update('destination_floor', e.target.value)} /></Field><Field label={pick(language, 'الأسانسير في مكان النقل', 'Origin elevator')}><div className="jm-switch-row"><button type="button" className={form.origin_elevator ? 'active' : ''} onClick={() => update('origin_elevator', true)}>{pick(language, 'موجود', 'Available')}</button><button type="button" className={!form.origin_elevator ? 'active' : ''} onClick={() => update('origin_elevator', false)}>{pick(language, 'غير موجود', 'None')}</button></div></Field><Field label={pick(language, 'الأسانسير في الوجهة', 'Destination elevator')}><div className="jm-switch-row"><button type="button" className={form.destination_elevator ? 'active' : ''} onClick={() => update('destination_elevator', true)}>{pick(language, 'موجود', 'Available')}</button><button type="button" className={!form.destination_elevator ? 'active' : ''} onClick={() => update('destination_elevator', false)}>{pick(language, 'غير موجود', 'None')}</button></div></Field><Field label={pick(language, 'عرض السلم', 'Stair width')}><select value={form.stair_width} onChange={(e) => update('stair_width', e.target.value)}><option value="wide">{pick(language, 'واسع', 'Wide')}</option><option value="normal">{pick(language, 'متوسط', 'Normal')}</option><option value="narrow">{pick(language, 'ضيق', 'Narrow')}</option></select></Field><Field label={pick(language, 'وقوف العربية', 'Truck parking')}><select value={form.parking_distance} onChange={(e) => update('parking_distance', e.target.value)}><option value="near">{pick(language, 'أمام المدخل', 'At entrance')}</option><option value="medium">{pick(language, 'مسافة قصيرة', 'Short distance')}</option><option value="far">{pick(language, 'بعيد عن المدخل', 'Far from entrance')}</option></select></Field></>}
+          {step === 3 && <><Field label={pick(language, 'عدد الغرف التقريبي', 'Approximate rooms')}><div className="jm-counter"><button type="button" onClick={() => update('rooms', Math.max(1, form.rooms - 1))}>−</button><b>{form.rooms}</b><button type="button" onClick={() => update('rooms', form.rooms + 1)}>+</button></div></Field><Field label={pick(language, 'الأجهزة الكبيرة', 'Large appliances')} wide><div className="jm-checkbox-grid">{[['fridge', 'ثلاجة', 'Fridge'], ['washer', 'غسالة', 'Washer'], ['oven', 'بوتاجاز', 'Oven'], ['ac', 'تكييف', 'AC'], ['tv', 'شاشة', 'TV']].map(([id, ar, en]) => <button type="button" className={form.appliances.includes(id) ? 'active' : ''} onClick={() => toggleArray('appliances', id)} key={id}><Check />{pick(language, ar, en)}</button>)}</div></Field><Field label={pick(language, 'الخدمات المطلوبة *', 'Services needed *')} wide><div className="jm-checkbox-grid jm-services-check">{moveContentServices.map((service) => <button type="button" className={form.services.includes(service.slug) ? 'active' : ''} onClick={() => toggleArray('services', service.slug)} key={service.slug}><Check />{service[`title_${language}`] || service.title_ar}</button>)}</div></Field><Field label={pick(language, 'قطع كبيرة أو حساسة', 'Large or delicate items')} wide><textarea value={form.large_items} onChange={(e) => update('large_items', e.target.value)} placeholder={pick(language, 'مثال: بيانو، نيش زجاج، سفرة كبيرة...', 'e.g. piano, glass cabinet, large dining table...')} /></Field></>}
           {step === 4 && <><Field label={pick(language, 'التاريخ المفضل *', 'Preferred date *')}><input type="date" min={new Date().toISOString().slice(0, 10)} value={form.preferred_date} onChange={(e) => update('preferred_date', e.target.value)} /></Field><Field label={pick(language, 'الفترة المفضلة', 'Preferred period')}><select value={form.preferred_period} onChange={(e) => update('preferred_period', e.target.value)}><option value="morning">{pick(language, 'صباحًا', 'Morning')}</option><option value="afternoon">{pick(language, 'ظهرًا', 'Afternoon')}</option><option value="evening">{pick(language, 'مساءً', 'Evening')}</option></select></Field><Field label={pick(language, 'مرونة الموعد', 'Date flexibility')} wide><label className="jm-toggle"><input type="checkbox" checked={form.flexible_date} onChange={(e) => update('flexible_date', e.target.checked)} /><span />{pick(language, 'الموعد مرن ويمكن تنسيقه مع الفريق', 'The date is flexible and can be coordinated')}</label></Field><Field label={pick(language, 'صور أو فيديو للعفش', 'Furniture photos or videos')} wide><div className="jm-upload"><UploadCloud /><b>{pick(language, 'ارفع حتى 10 ملفات', 'Upload up to 10 files')}</b><small>{pick(language, 'الصور تساعدنا نراجع الطلب بدقة', 'Photos help us review accurately')}</small><input type="file" multiple accept="image/*,video/mp4,video/webm" onChange={(e) => setFiles([...e.target.files].slice(0, 10))} /></div>{files.length > 0 && <p className="jm-file-count"><CheckCircle2 />{pick(language, `تم اختيار ${files.length} ملف`, `${files.length} files selected`)}</p>}</Field><Field label={pick(language, 'ملاحظات إضافية', 'Additional notes')} wide><textarea value={form.notes} onChange={(e) => update('notes', e.target.value)} /></Field></>}
-          {step === 5 && <div className="jm-review-grid"><article><span>{pick(language, 'العميل', 'Customer')}</span><b>{form.customer_name}</b><p><bdi>{form.phone}</bdi></p></article><article><span>{pick(language, 'خط النقل', 'Route')}</span><b>{form.origin_area} ← {form.destination_area}</b><p>{pick(language, form.move_type === 'home' ? 'منزل' : 'مكتب', form.move_type === 'home' ? 'Home' : 'Office')}</p></article><article><span>{pick(language, 'الموعد', 'Schedule')}</span><b>{form.preferred_date}</b><p>{form.preferred_period}</p></article><article><span>{pick(language, 'الخدمات', 'Services')}</span><b>{form.services.length}</b><p>{services.filter((s) => form.services.includes(s.slug)).map((s) => s[`title_${language}`] || s.title_ar).join('، ')}</p></article><article><span>{pick(language, 'المرفقات', 'Attachments')}</span><b>{files.length}</b><p>{pick(language, 'صور أو فيديو', 'Photos or videos')}</p></article><article className="jm-review-note"><ShieldCheck /><p>{pick(language, 'إرسال الطلب لا يعتبر تأكيدًا للسعر أو الموعد. سيتواصل الفريق معك للمراجعة والتأكيد.', 'Submitting does not confirm the price or date. Our team will contact you to review and confirm.')}</p></article></div>}
+          {step === 5 && <div className="jm-review-grid"><article><span>{pick(language, 'العميل', 'Customer')}</span><b>{form.customer_name}</b><p><bdi>{form.phone}</bdi></p></article><article><span>{pick(language, 'خط النقل', 'Route')}</span><b>{form.origin_area} ← {form.destination_area}</b><p>{moveTypeLabel(language, form.move_type)}</p></article><article><span>{pick(language, 'الموعد', 'Schedule')}</span><b>{form.preferred_date}</b><p>{form.preferred_period}</p></article><article><span>{pick(language, 'الخدمات', 'Services')}</span><b>{form.services.length}</b><p>{moveContentServices.filter((s) => form.services.includes(s.slug)).map((s) => s[`title_${language}`] || s.title_ar).join('، ')}</p></article><article><span>{pick(language, 'المرفقات', 'Attachments')}</span><b>{files.length}</b><p>{pick(language, 'صور أو فيديو', 'Photos or videos')}</p></article><article className="jm-review-note"><ShieldCheck /><p>{pick(language, 'إرسال الطلب لا يعتبر تأكيدًا للسعر أو الموعد. سيتواصل الفريق معك للمراجعة والتأكيد.', 'Submitting does not confirm the price or date. Our team will contact you to review and confirm.')}</p></article></div>}
         </div>
         {error && <div className="jm-form-error">{error}</div>}
         <div className="jm-wizard-actions">{step > 0 && <button className="jm-btn jm-btn-soft" onClick={() => { setStep(step - 1); setError(''); }}><ArrowRight />{pick(language, 'السابق', 'Back')}</button>}<span />{step < 5 ? <button className="jm-btn jm-btn-red" onClick={next}>{pick(language, 'التالي', 'Continue')}<ArrowLeft /></button> : <button className="jm-btn jm-btn-red" disabled={submitting} onClick={submit}>{submitting ? copy[language].common.loading : pick(language, 'أرسل طلب النقلة', 'Submit move request')}<Send /></button>}</div>

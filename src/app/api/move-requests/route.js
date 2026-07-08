@@ -134,7 +134,7 @@ export async function POST(request) {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         String(data.customer_name).trim(), phone, cleanPhone(data.whatsapp) || phone, cleanPhone(data.alternate_phone) || null,
-        data.move_type || 'home', data.origin_governorate || null, String(data.origin_area).trim(), data.origin_address || null,
+        data.move_type || 'apartment', data.origin_governorate || null, String(data.origin_area).trim(), data.origin_address || null,
         data.destination_governorate || null, String(data.destination_area).trim(), data.destination_address || null,
         data.origin_floor || null, data.destination_floor || null, data.origin_elevator ? 1 : 0, data.destination_elevator ? 1 : 0,
         data.stair_width || null, data.parking_distance || null, Math.max(1, Number(data.rooms || 1)),

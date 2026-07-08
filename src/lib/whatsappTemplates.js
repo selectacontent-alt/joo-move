@@ -137,17 +137,17 @@ export const DEFAULT_MOVE_STATUS_TEMPLATES = {
   cancelled: 'ℹ️ تم إلغاء طلب نقل الأثاث *{request_number}*. إذا كنت ترغب في تحديد موعد جديد، تواصل مع فريق Joo Move في أي وقت.'
 };
 
-const MOVE_TYPE_LABELS = { home: 'نقل منزل', office: 'نقل مكتب أو شركة' };
+const MOVE_TYPE_LABELS = { home: 'شقة', apartment: 'شقة', villa: 'ڤيلا', office: 'مكتب' };
 const STAIR_LABELS = { wide: 'واسع', normal: 'متوسط', narrow: 'ضيق' };
 const PARKING_LABELS = { near: 'أمام المدخل', medium: 'على مسافة قصيرة', far: 'بعيد عن المدخل' };
 const PERIOD_LABELS = { morning: 'صباحًا', afternoon: 'ظهرًا', evening: 'مساءً' };
 const APPLIANCE_LABELS = { fridge: 'ثلاجة', washer: 'غسالة', oven: 'بوتاجاز', ac: 'تكييف', tv: 'شاشة' };
 const SERVICE_LABELS = {
-  'furniture-moving': 'نقل الأثاث',
-  'professional-packing': 'التغليف الاحترافي',
-  assembly: 'فك وتركيب الأثاث',
-  loading: 'الرفع والتنزيل',
-  'home-office': 'نقل المنازل والمكاتب'
+  'furniture-moving': 'نقل الاثاث بدون تغليف',
+  'professional-packing': 'التغليف الكامل',
+  loading: 'خدمة الونش',
+  assembly: 'فك وتركيب الاثاث',
+  electrical: 'خدمات كهربائية'
 };
 
 const parseArray = (value) => {
@@ -219,7 +219,7 @@ export function buildMoveRequestTemplateValues(request, options = {}) {
     rooms: show(request.rooms),
     appliances: appliances.length ? appliances.map((item) => APPLIANCE_LABELS[item] || item).join('، ') : 'لا توجد أجهزة محددة',
     large_items: show(request.large_items, 'لا توجد قطع مذكورة'),
-    services: services.length ? services.map((item) => serviceNames[item] || SERVICE_LABELS[item] || item).join('، ') : 'غير محددة',
+    services: services.length ? services.map((item) => SERVICE_LABELS[item] || serviceNames[item] || item).join('، ') : 'غير محددة',
     preferred_date: formatDate(request.preferred_date),
     preferred_period: PERIOD_LABELS[request.preferred_period] || show(request.preferred_period),
     flexible_date: request.flexible_date ? 'نعم، الموعد مرن' : 'لا',
