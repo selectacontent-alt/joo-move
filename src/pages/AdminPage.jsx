@@ -3846,7 +3846,7 @@ const AdminPage = ({ setCurrentPage, user, setAuth }) => {
                   <div style={{ width: '50px', height: '50px', background: 'rgba(255,255,255,0.2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Phone size={24} /></div>
                   <div>
                     <p style={{ margin: 0, fontSize: '0.9rem', opacity: 0.9 }}>اتصل بنا</p>
-                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.2rem', direction: 'ltr' }}>01013100178</p>
+                    <p style={{ margin: 0, fontWeight: 'bold', fontSize: '1.2rem', direction: 'ltr' }}>01097041523</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>

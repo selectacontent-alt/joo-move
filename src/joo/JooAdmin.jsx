@@ -389,7 +389,7 @@ function AboutAgency() {
     </div>
     <section className="jma-about-agency-why"><span>لماذا S C Marketing؟</span><h2>لأن الموقع القوي لازم يساعدك تحقق هدفك</h2><p>نبدأ بفهم نشاطك وأهدافك، ثم نبني خطة واضحة وننفذها بمحتوى أصلي وتصميم جذاب وحلول تقنية حديثة. المتابعة لا تنتهي عند التسليم؛ نستمر في القياس والتطوير وتنفيذ الملاحظات.</p></section>
     <section className="jma-about-agency-contact">
-      <a href="tel:01013100178"><Phone /><span><small>اتصل بنا</small><bdi>01013100178</bdi></span></a>
+      <a href="tel:01097041523"><Phone /><span><small>اتصل بنا</small><bdi>01097041523</bdi></span></a>
       <a href="mailto:info@selectcustomersmarketing.com"><MessageCircle /><span><small>راسلنا</small><b>info@selectcustomersmarketing.com</b></span></a>
       <div><MapPin /><span><small>العنوان</small><b>شارع 15 مايو أمام كنتاكي، شبرا الخيمة، القاهرة</b></span></div>
     </section>
