@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
-  ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, Boxes, Building2, CalendarDays, Check,
+  ArrowLeft, ArrowRight, ArrowUp, ArrowUpLeft, ArrowUpRight, Boxes, Building2, CalendarDays, Check,
   CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Clock3, Copy, Facebook,
   Headphones, Home, Instagram, MapPin, Menu, MessageCircle, PackageCheck,
   Phone, Play, Route, Search, Send, ShieldCheck, Sparkles, Star, Truck, UploadCloud,
@@ -686,7 +686,174 @@ function WorkPage({ media }) {
 
 function AboutPage({ navigate }) {
   const { language } = useLanguage();
-  return <main><PageHero eyebrow={pick(language, 'عن Joo Move', 'About Joo Move')} title={pick(language, 'بننقل أكتر من عفش… بننقل حياة كاملة', 'We move more than furniture')} description={pick(language, 'شركة نقل مصرية بتبني كل نقلة على التخطيط، العناية والتواصل الواضح.', 'An Egyptian moving company built on planning, care and clear communication.')} /><section className="jm-section"><div className="jm-container jm-about-story"><div><img src="/joo/packing-team.jpg" alt="Joo Move team" /></div><div><SectionHead eyebrow={pick(language, 'قصتنا', 'Our story')} title={pick(language, 'هدفنا إن يوم النقل مايبقاش يوم قلق', 'Moving day should not be stressful')} description={pick(language, 'نبدأ بفهم المكان والقطع والمواعيد، وبعدها نبني خطة تناسب النقلة فعلًا. كل مسؤول في الفريق عارف دوره، وكل عميل عارف الخطوة الجاية.', 'We understand your locations, items and timing first, then build a move plan that actually fits. Every crew member knows the role, and every customer knows what comes next.')} /><div className="jm-values"><div><ShieldCheck /><b>{pick(language, 'الأمان قبل السرعة', 'Safety before speed')}</b></div><div><Clock3 /><b>{pick(language, 'المواعيد التزام', 'Time is a commitment')}</b></div><div><Headphones /><b>{pick(language, 'تواصل واضح', 'Clear communication')}</b></div></div><button className="jm-btn jm-btn-red" onClick={() => navigate('/request-move')}>{copy[language].nav.request}</button></div></div></section></main>;
+  const services = [
+    {
+      icon: PackageCheck,
+      number: '01',
+      title: pick(language, 'تغليف الأثاث', 'Furniture packing'),
+      description: pick(
+        language,
+        'يتولى فريق متخصص تغليف الأثاث بعناية باستخدام خامات عالية الجودة، لتوفير الحماية المناسبة من الخدوش والصدمات خلال التنزيل والنقل والرفع.',
+        'A specialist crew carefully wraps your furniture with high-quality materials to protect it from scratches and impact during handling, transport and lifting.'
+      ),
+    },
+    {
+      icon: Boxes,
+      number: '02',
+      title: pick(language, 'تعبئة المقتنيات القابلة للكسر', 'Packing fragile belongings'),
+      description: pick(
+        language,
+        'نوفر كراتين بمقاسات مختلفة، إلى جانب البابلز والاسترتش وخامات التغليف المناسبة، لحماية المقتنيات الحساسة وتجهيزها للنقل بأمان.',
+        'We provide cartons in different sizes, bubble wrap, stretch film and the right packing materials to prepare delicate belongings for safe transport.'
+      ),
+    },
+    {
+      icon: Wrench,
+      number: '03',
+      title: pick(language, 'فك وتركيب الأثاث', 'Furniture disassembly and reassembly'),
+      description: pick(
+        language,
+        'نعاين القطع التي تحتاج إلى الفك، ثم نفكها بعناية ونرقّمها لتسهيل إعادة تركيبها بسرعة وبشكل منظّم في المكان الجديد.',
+        'We inspect the pieces that need dismantling, carefully take them apart and number every component for an organized, efficient reassembly.'
+      ),
+    },
+  ];
+  const steps = [
+    [Search, pick(language, 'معاينة التفاصيل', 'Assess the details'), pick(language, 'نعاين الأثاث ونحدد القطع والخدمات المطلوبة، حتى نعرف احتياجات النقلة بدقة.', 'We assess the furniture, identify the pieces involved and review the services your move requires.')],
+    [CalendarDays, pick(language, 'تجهيز الخطة', 'Build the plan'), pick(language, 'نجهز العمالة والسيارة والخامات والأدوات المناسبة قبل يوم التنفيذ.', 'We prepare the right crew, vehicle, materials and tools before moving day.')],
+    [PackageCheck, pick(language, 'فك وتغليف', 'Dismantle and pack'), pick(language, 'نفك القطع ونرقّمها، ونغلف كل غرض بالخامة المناسبة لطبيعته.', 'We dismantle and number each piece, then protect every item with the material that suits it.')],
+    [Truck, pick(language, 'نقل وتركيب', 'Move and reassemble'), pick(language, 'ننقل الأثاث بشكل منظم، ثم نعيد تركيبه في المكان الجديد بأسرع وقت ممكن.', 'We transport everything in an organized way, then reassemble it efficiently at the new location.')],
+  ];
+
+  return <main className="jm-about-page">
+    <section className="jm-about-hero">
+      <div className="jm-about-hero-grid-pattern" />
+      <div className="jm-about-hero-orb jm-about-hero-orb-one" />
+      <div className="jm-about-hero-orb jm-about-hero-orb-two" />
+      <div className="jm-container jm-about-hero-layout">
+        <div className="jm-about-hero-copy">
+          <span className="jm-about-kicker"><i />{pick(language, 'من نحن • منذ 2014', 'Who we are • Since 2014')}</span>
+          <h1>{pick(language, 'خبرة تجعل نقلتك', 'Experience that makes moving')} <em>{pick(language, 'أكثر هدوءًا وأمانًا وسهولة.', 'calmer, safer and easier.')}</em></h1>
+          <p>{pick(
+            language,
+            'تُعد «چو موف» من أكبر شركات النقل في مصر. ومنذ تأسيسها عام 2014، تقدّم خدمات نقل الأثاث بخبرة واسعة، وتغطي جميع محافظات مصر بفريق مدرّب وتجهيزات تناسب كل نقلة.',
+            'Joo Move is one of Egypt’s largest moving companies. Since its founding in 2014, it has provided furniture moving services across all of Egypt’s governorates, with trained crews and equipment tailored to every move.'
+          )}</p>
+          <div className="jm-about-hero-actions">
+            <button className="jm-btn jm-btn-red" onClick={() => navigate('/request-move')}>{pick(language, 'خطّط لنقلتك الآن', 'Plan your move')}{language === 'ar' ? <ArrowLeft /> : <ArrowRight />}</button>
+            <button className="jm-btn jm-btn-glass" onClick={() => navigate('/services')}>{pick(language, 'استكشف خدماتنا', 'Explore our services')}{language === 'ar' ? <ArrowUpLeft /> : <ArrowUpRight />}</button>
+          </div>
+          <div className="jm-about-facts">
+            <article><strong dir="ltr">2014</strong><span>{pick(language, 'بداية رحلتنا', 'Our journey began')}</span></article>
+            <article><MapPin /><strong>{pick(language, 'كل مصر', 'Across Egypt')}</strong><span>{pick(language, 'نغطي جميع المحافظات', 'Every governorate covered')}</span></article>
+            <article><Sparkles /><strong>{pick(language, 'حلول متكاملة', 'Complete solutions')}</strong><span>{pick(language, 'كل التفاصيل في مكان واحد', 'Every detail in one place')}</span></article>
+          </div>
+        </div>
+        <div className="jm-about-hero-visual">
+          <figure className="jm-about-photo-main"><img src="/joo/packing-team.jpg" alt={pick(language, 'تغليف الأثاث بعناية', 'Furniture packed with care')} fetchPriority="high" decoding="async" /></figure>
+          <figure className="jm-about-photo-float"><img src="/joo/move-home.jpg" alt={pick(language, 'فريق نقل الأثاث', 'Furniture moving crew')} decoding="async" /></figure>
+          <div className="jm-about-safety-badge"><span><ShieldCheck /></span><div><b>{pick(language, 'عناية في كل خطوة', 'Care at every step')}</b><small>{pick(language, 'من أول المعاينة حتى التركيب', 'From assessment to reassembly')}</small></div></div>
+          <span className="jm-about-year-mark" dir="ltr">SINCE <b>2014</b></span>
+        </div>
+      </div>
+    </section>
+
+    <section className="jm-section jm-about-intro">
+      <div className="jm-container jm-about-intro-grid">
+        <div className="jm-about-intro-heading">
+          <span className="jm-eyebrow">{pick(language, 'خبرة في كل خطوة', 'Experience at every step')}</span>
+          <h2>{pick(language, 'كل تفاصيل نقلتك في مكان واحد.', 'Every moving detail, handled in one place.')}</h2>
+        </div>
+        <div className="jm-about-intro-copy">
+          <p>{pick(
+            language,
+            'عملية نقل الأثاث تحتاج إلى الخبرة والدقة والإمكانات الحديثة؛ لذلك نوفر لك كل ما تحتاج إليه، بدايةً من العمالة المدرّبة والسيارات المجهزة، وصولًا إلى الأوناش الهيدروليكية وخدمات النجارة والكهرباء وفنيي التكييف.',
+            'Furniture moving calls for experience, precision and the right modern equipment. That is why we bring everything together—from trained crews and equipped vehicles to hydraulic hoists, carpentry, electrical work and air-conditioning technicians.'
+          )}</p>
+          <p>{pick(
+            language,
+            'سواء كنت تنتقل من شقة أو مكتب أو متجر أو مقر شركة، نجهز الخدمة بما يناسب المكان وحجم الأثاث وطبيعة كل قطعة، حتى تسير النقلة بشكل منظم من البداية إلى النهاية.',
+            'Whether you are moving from a home, office, shop or company headquarters, we tailor the service to the space, move size and nature of every item for an organized experience from start to finish.'
+          )}</p>
+          <div className="jm-about-property-types">
+            <span><Home />{pick(language, 'شقق ومنازل', 'Homes')}</span>
+            <span><Building2 />{pick(language, 'مكاتب ومقار شركات', 'Offices & businesses')}</span>
+            <span><Boxes />{pick(language, 'محلات تجارية', 'Shops')}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section className="jm-section jm-about-services">
+      <div className="jm-container">
+        <div className="jm-about-section-heading">
+          <span className="jm-eyebrow">{pick(language, 'خدماتنا', 'Our services')}</span>
+          <h2>{pick(language, 'نقل متكامل من البداية للنهاية', 'A complete move from start to finish')}</h2>
+          <p>{pick(language, 'ننسّق العمالة والتجهيزات والتخصصات المطلوبة في مكان واحد، لتبقى كل خطوة واضحة ومنظمة.', 'We bring the people, equipment and specialist services together in one place, keeping every step clear and organized.')}</p>
+        </div>
+        <div className="jm-about-services-layout">
+          <article className="jm-about-service-featured">
+            <div className="jm-about-service-featured-photo"><img src="/joo/office-move.jpg" alt={pick(language, 'فريق چو موف يجهز مكتبًا للنقل', 'Joo Move crew preparing an office move')} loading="lazy" decoding="async" /></div>
+            <div className="jm-about-service-featured-copy">
+              <span className="jm-about-service-icon"><Truck /></span>
+              <small>00 / {pick(language, 'الخدمة المتكاملة', 'Complete service')}</small>
+              <h3>{pick(language, 'فريق وتجهيزات لكل نوع نقلة', 'The right team and equipment for every move')}</h3>
+              <p>{pick(language, 'عمالة مدرّبة، سيارات مجهزة، أوناش هيدروليكية، ونجارون وكهربائيون وفنيو تكييف حسب احتياج النقلة.', 'Trained crews, equipped vehicles, hydraulic hoists, carpenters, electricians and AC technicians—available according to your move’s needs.')}</p>
+              <button className="jm-text-link" onClick={() => navigate('/services')}>{pick(language, 'استكشف كل الخدمات', 'Explore all services')}{language === 'ar' ? <ArrowLeft /> : <ArrowRight />}</button>
+            </div>
+          </article>
+          <div className="jm-about-service-stack">
+            {services.map(({ icon: Icon, number, title, description }) => <article key={number} className="jm-about-service-card">
+              <span className="jm-about-service-icon"><Icon /></span>
+              <div><small>{number}</small><h3>{title}</h3><p>{description}</p></div>
+              <b className="jm-about-service-number" aria-hidden="true">{number}</b>
+            </article>)}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section className="jm-about-process">
+      <div className="jm-container">
+        <div className="jm-about-process-head">
+          <span className="jm-about-kicker"><i />{pick(language, 'منهج عمل منظّم', 'An organized process')}</span>
+          <h2>{pick(language, 'كل نقلة تبدأ بخطة واضحة.', 'Every move starts with a clear plan.')}</h2>
+          <p>{pick(language, 'نراجع التفاصيل قبل التنفيذ، ونحدد الوقت والأدوات والخامات المطلوبة حتى تكون كل خطوة واضحة ومنظمة.', 'We review the details first and define the timing, tools and materials so every step is clear and organized.')}</p>
+        </div>
+        <div className="jm-about-process-grid">
+          {steps.map(([Icon, title, description], index) => <article key={title}>
+            <div className="jm-about-process-icon"><Icon /></div>
+            <span>0{index + 1}</span>
+            <h3>{title}</h3>
+            <p>{description}</p>
+          </article>)}
+        </div>
+      </div>
+    </section>
+
+    <section className="jm-section jm-about-promise">
+      <div className="jm-container jm-about-promise-card">
+        <div className="jm-about-promise-media">
+          <img src="/joo/hero-moving.jpg" alt={pick(language, 'فريق چو موف أثناء تنفيذ نقلة أثاث', 'Joo Move crew handling a furniture move')} loading="lazy" decoding="async" />
+          <span><CheckCircle2 />{pick(language, 'تفاصيل أقل عليك… عناية أكبر علينا', 'Less for you to worry about—more care from us')}</span>
+        </div>
+        <div className="jm-about-promise-copy">
+          <span className="jm-eyebrow">{pick(language, 'هدفنا', 'Our goal')}</span>
+          <h2>{pick(language, 'تجربة انتقال خالية من الهموم قدر الإمكان.', 'A moving experience with as little worry as possible.')}</h2>
+          <p>{pick(language, 'نهتم بالتفاصيل الصغيرة قبل الكبيرة، ونجهز كل مرحلة بعناية حتى تصل إلى مكانك الجديد براحة وتنظيم أكبر.', 'We care for the smallest details and prepare every stage carefully, so you reach your new place with greater comfort and a more organized experience.')}</p>
+          <div className="jm-about-promise-points">
+            <span><ShieldCheck />{pick(language, 'حماية مناسبة لكل قطعة', 'The right protection for every item')}</span>
+            <span><Clock3 />{pick(language, 'تنظيم واضح لكل مرحلة', 'Every stage clearly organized')}</span>
+            <span><Headphones />{pick(language, 'متابعة من البداية للنهاية', 'Follow-up from start to finish')}</span>
+          </div>
+          <div className="jm-about-promise-actions">
+            <button className="jm-btn jm-btn-red" onClick={() => navigate('/request-move')}>{pick(language, 'اطلب معاينة', 'Request an assessment')}{language === 'ar' ? <ArrowLeft /> : <ArrowRight />}</button>
+            <button className="jm-btn jm-btn-soft" onClick={() => navigate('/contact')}>{pick(language, 'تواصل معنا', 'Contact us')}<MessageCircle /></button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>;
 }
 
 function ContactPage({ settings }) {

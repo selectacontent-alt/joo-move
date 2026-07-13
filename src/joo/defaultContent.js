@@ -4,8 +4,8 @@ export const BRAND = {
   whatsapp: '201000000000',
   hoursAr: 'يوميًا من 9 صباحًا إلى 11 مساءً',
   hoursEn: 'Daily, 9 AM–11 PM',
-  areaAr: 'القاهرة والجيزة والمناطق المحيطة',
-  areaEn: 'Cairo, Giza and nearby areas',
+  areaAr: 'جميع محافظات مصر',
+  areaEn: 'All governorates across Egypt',
 };
 
 export const MOVE_STATUSES = [

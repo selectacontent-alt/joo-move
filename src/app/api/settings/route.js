@@ -22,6 +22,13 @@ export async function GET() {
     rows.forEach(row => {
       settings[row.setting_key] = repairArabicMojibake(row.setting_value);
     });
+    // Treat the former Cairo/Giza-only copy as a legacy default now that Joo Move serves all governorates.
+    if (settings.joo_area_ar === 'القاهرة والجيزة والمناطق المحيطة') {
+      settings.joo_area_ar = DEFAULT_SITE_SETTINGS.joo_area_ar;
+    }
+    if (settings.joo_area_en === 'Cairo, Giza and nearby areas') {
+      settings.joo_area_en = DEFAULT_SITE_SETTINGS.joo_area_en;
+    }
     if (!settings.wa_template_new_order || settings.wa_template_new_order === LEGACY_ORDER_CONFIRMATION_TEMPLATE) {
       settings.wa_template_new_order = DEFAULT_ORDER_CONFIRMATION_TEMPLATE;
     }
